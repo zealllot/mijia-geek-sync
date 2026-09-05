@@ -11,11 +11,19 @@ export function buildView(config, snapshot) {
 
 // 有配置时：按配置的分组和顺序出卡片，值从快照里取。
 function mappedView(config, snapshot) {
-  const groups = config.groups.map((g) => ({
-    title: g.title,
-    verdict: g.verdict ? evaluateVerdict(g.verdict, snapshot) : null,
-    cards: g.cards.map((c) => hydrate(c, snapshot)),
-  }));
+  const groups = config.groups.map((g) => {
+    const verdict = g.verdict ? evaluateVerdict(g.verdict, snapshot) : null;
+    return {
+      title: g.title,
+      verdict,
+      // 只有「就是它挡住的」那一张值得高亮。
+      // 「开着」不值得 —— 开着是常态，一屏里五块都亮就等于没有高亮。
+      cards: g.cards.map((c) => {
+        const card = hydrate(c, snapshot);
+        return verdict?.cause && refOf(card) === verdict.cause ? { ...card, culprit: true } : card;
+      }),
+    };
+  });
 
   // 白名单：只有配置里显式声明成 toggle 的变量能写。
   // 不是「任意 scope/id 都能写」—— 即使有人直接 POST 任意参数，
@@ -108,4 +116,8 @@ export function assertWritable(writable, scope, id) {
   if (!writable.includes(ref)) {
     throw new Error(`${ref} 不在可写白名单里`);
   }
+}
+
+function refOf(card) {
+  return card.kind === 'rule' ? `rule.${card.ruleId}` : `${card.scope}.${card.id}`;
 }

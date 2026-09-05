@@ -17,7 +17,7 @@ test('没有任何 blocker 命中时给出 ok 文案', () => {
     snapshot,
   );
 
-  assert.deepEqual(v, { blocked: false, say: '一切正常，应该会自动亮', unresolved: [] });
+  assert.deepEqual(v, { blocked: false, say: '一切正常，应该会自动亮', cause: null, unresolved: [] });
 });
 
 test('变量等于指定值时命中该 blocker', () => {
@@ -34,7 +34,7 @@ test('变量等于指定值时命中该 blocker', () => {
     cinemaOn,
   );
 
-  assert.deepEqual(v, { blocked: true, say: '观影模式开着，会压制自动亮灯', unresolved: [] });
+  assert.deepEqual(v, { blocked: true, say: '观影模式开着，会压制自动亮灯', cause: 'global.xggCinema', unresolved: [] });
 });
 
 test('规则被停用时命中该 blocker', () => {
@@ -48,7 +48,7 @@ test('规则被停用时命中该 blocker', () => {
     disabled,
   );
 
-  assert.deepEqual(v, { blocked: true, say: '规则「光亮灯灭」被停用了', unresolved: [] });
+  assert.deepEqual(v, { blocked: true, say: '规则「光亮灯灭」被停用了', cause: 'rule.20260822110', unresolved: [] });
 });
 
 test('规则启用着时不命中「被停用」的 blocker', () => {
@@ -86,4 +86,32 @@ test('全部引用都解析得到时 unresolved 是空的', () => {
   );
 
   assert.deepEqual(v.unresolved, []);
+});
+
+test('命中时一并报出是哪一项造成的，好让页面把它高亮出来', () => {
+  const cinemaOn = {
+    ...snapshot,
+    variables: { global: { xggCinema: { type: 'number', value: 1, name: '观影模式' } } },
+  };
+
+  const v = evaluateVerdict(
+    { blockers: [{ scope: 'global', id: 'xggCinema', equals: 1, say: '观影模式开着' }], ok: '正常' },
+    cinemaOn,
+  );
+
+  assert.equal(v.cause, 'global.xggCinema');
+});
+
+test('规则造成的阻塞报出规则引用', () => {
+  const disabled = { ...snapshot, rules: { '20260822110': { id: '20260822110', name: '光亮灯灭', enable: false } } };
+
+  const v = evaluateVerdict({ blockers: [{ rule: '20260822110', enabled: false, say: 'x' }], ok: '正常' }, disabled);
+
+  assert.equal(v.cause, 'rule.20260822110');
+});
+
+test('没被挡住时没有 cause', () => {
+  const v = evaluateVerdict({ blockers: [{ scope: 'global', id: 'xggCinema', equals: 1, say: 'x' }], ok: '正常' }, snapshot);
+
+  assert.equal(v.cause, null);
 });

@@ -114,6 +114,7 @@ test('分组带 verdict 时求值并挂在分组上', () => {
   assert.deepEqual(view.groups[0].verdict, {
     blocked: true,
     say: '规则「观影联动」被停用了',
+    cause: 'rule.20260822270',
     unresolved: [],
   });
 });
@@ -155,4 +156,47 @@ test('不在白名单里的变量拒绝写入', () => {
 
 test('扁平模式（白名单为空）下一律拒绝写入', () => {
   assert.throws(() => assertWritable([], 'global', 'xggCinema'), /不在可写白名单/);
+});
+
+test('造成阻塞的那张卡片被标成 culprit，好让页面只高亮它', () => {
+  // 「开着」不值得高亮 —— 开着是常态。一屏里五块都亮就等于没有高亮。
+  const cfg = {
+    groups: [{
+      title: '客厅',
+      verdict: { blockers: [{ scope: 'global', id: 'xggCinema', equals: 0, say: '观影模式关着' }], ok: '正常' },
+      cards: [
+        { kind: 'toggle', title: '观影模式', scope: 'global', id: 'xggCinema', on: 1, off: 0 },
+        { kind: 'readonly', title: '照度阈值', scope: 'global', id: 'xggLivingLux' },
+      ],
+    }],
+  };
+
+  const view = buildView(cfg, snapshot);
+
+  assert.equal(view.groups[0].cards[0].culprit, true);
+  assert.equal(view.groups[0].cards[1].culprit, undefined);
+});
+
+test('规则造成阻塞时高亮的是那条规则的卡片', () => {
+  const cfg = {
+    groups: [{
+      title: '客厅',
+      verdict: { blockers: [{ rule: '20260822270', enabled: false, say: 'x' }], ok: '正常' },
+      cards: [
+        { kind: 'rule', title: '光亮灯灭', ruleId: '20260822110' },
+        { kind: 'rule', title: '观影联动', ruleId: '20260822270' },
+      ],
+    }],
+  };
+
+  const view = buildView(cfg, snapshot);
+
+  assert.equal(view.groups[0].cards[0].culprit, undefined);
+  assert.equal(view.groups[0].cards[1].culprit, true);
+});
+
+test('没被挡住时一张 culprit 都没有', () => {
+  const view = buildView(config, snapshot);
+
+  assert.equal(view.groups[0].cards.some((c) => c.culprit), false);
 });

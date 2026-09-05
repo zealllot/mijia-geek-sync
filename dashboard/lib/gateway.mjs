@@ -54,6 +54,21 @@ export async function callXgg(args, { run, attempts = 3 } = {}) {
   throw new Error(`xgg ${args.join(' ')}：${attempts} 次都没拿到有效响应（${last}）`);
 }
 
+// 把一个 ok:false 的响应变成异常。
+//
+// callXgg 有意让 ok:false 原样返回（那是确定的答案，不该重试），但**读取路径**
+// 绝不能拿它当数据用：未登录时 variable watch 返回 ok:false，
+// normalizeSnapshot 会把缺失的 variables 退成 {}，于是「没登录」被伪装成
+// 「网关上什么都没有」，页面理直气壮地显示「一切正常，0 项」。
+export function unwrap(data, what) {
+  if (data?.ok === false) {
+    const e = new Error(`${what}：${data.error?.message ?? data.error?.code ?? '网关拒绝了'}`);
+    e.code = data.error?.code;
+    throw e;
+  }
+  return data;
+}
+
 import { spawn } from 'node:child_process';
 
 // 真正的子进程调用。
@@ -98,8 +113,8 @@ export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs 
     // 一轮完整刷新只有 2 次子进程调用：variable watch 一次拿全 scope。
     async snapshot() {
       const [watchOut, ruleListOut] = await Promise.all([
-        callXgg(['variable', 'watch'], { run }),
-        callXgg(['rule', 'list'], { run }),
+        callXgg(['variable', 'watch'], { run }).then((d) => unwrap(d, 'variable watch')),
+        callXgg(['rule', 'list'], { run }).then((d) => unwrap(d, 'rule list')),
       ]);
       return normalizeSnapshot(watchOut, ruleListOut);
     },

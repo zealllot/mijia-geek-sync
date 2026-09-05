@@ -20,9 +20,11 @@ export function evaluateVerdict(verdict, snapshot) {
     if (hit === null && matches(b, target)) hit = b;
   }
 
+  // cause 让页面知道该高亮哪一块瓦片。
+  // 「开着」不值得高亮 —— 开着是常态；「这一项就是原因」才值得。
   return hit
-    ? { blocked: true, say: hit.say, unresolved }
-    : { blocked: false, say: verdict.ok, unresolved };
+    ? { blocked: true, say: hit.say, cause: refOf(hit), unresolved }
+    : { blocked: false, say: verdict.ok, cause: null, unresolved };
 }
 
 function resolve(b, snapshot) {

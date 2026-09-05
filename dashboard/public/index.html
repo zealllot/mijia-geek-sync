@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模式看板</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23e8a33d'/%3E%3Ccircle cx='16' cy='16' r='14' fill='none' stroke='%23e8a33d' stroke-opacity='.3' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+/* 温度即状态：一切正常时页面是暖的，有东西挡住自动化时整页降温。
+   住户不用读完字就知道出没出事。 */
+:root {
+  color-scheme: dark;
+  --ground: #14110e;
+  --panel: #1d1916;
+  --line: #2e2721;
+  --ink: #ece2d5;
+  --ink-dim: #9b8e7e;
+  --ink-faint: #6b6156;
+  --lit: #e8a33d;      /* 暖：亮着、开着、正常 */
+  --cold: #6d818d;     /* 冷：灭着、关着、被挡住 */
+  --cold-lit: #a8c2d0; /* 同样是冷的，但亮到能当大字标题读 */
+  --alarm: #c9603f;    /* 配置引用不到东西了 */
+  --glow: var(--lit);
+  --serif: "Songti SC", "STSong", "Source Han Serif SC", Georgia, serif;
+  --sans: "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  --mono: "SF Mono", "Menlo", ui-monospace, monospace;
+}
+body[data-mood="cold"] { --glow: var(--cold); --glow-text: var(--cold-lit); }
+:root { --glow-text: var(--lit); }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 15px/1.7 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  padding: 0 20px 80px;
+}
+/* 纸一样的颗粒，给深底一点质地 */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .22;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+.wrap { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }
+
+/* ---------- 顶部：结论 ---------- */
+.lamp { position: relative; padding: 72px 0 40px; text-align: center; }
+.lamp::before {
+  content: ""; position: absolute; left: 50%; top: 34px;
+  width: 560px; height: 300px; transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, var(--glow) 0%, transparent 68%);
+  opacity: .17; filter: blur(24px); pointer-events: none;
+  transition: opacity .7s ease, background .7s ease;
+}
+body[data-mood="cold"] .lamp::before { opacity: .11; }
+
+.eyebrow {
+  font: 400 12px/1 var(--sans); letter-spacing: .16em;
+  color: var(--ink-faint); margin-bottom: 22px;
+}
+.verdict {
+  position: relative; font-family: var(--serif); font-weight: 400;
+  font-size: clamp(26px, 5vw, 39px); line-height: 1.5; letter-spacing: .01em;
+  margin: 0 auto; max-width: 26em; text-wrap: balance; line-break: strict;
+}
+.where-line {
+  font-family: var(--serif); font-size: 17px; letter-spacing: .12em;
+  color: var(--ink-dim); margin-bottom: 14px;
+}
+.also { margin-top: 18px; font-size: 13px; color: var(--ink-faint); }
+.verdict em { font-style: normal; color: var(--glow-text); transition: color .7s ease; }
+.stamp {
+  margin-top: 26px; font: 400 12px/1 var(--mono); letter-spacing: .08em; color: var(--ink-faint);
+}
+.stamp .dot {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--glow); margin-right: 8px; vertical-align: middle;
+  transition: background .7s ease;
+}
+
+/* ---------- 分组 ---------- */
+.group { margin-top: 52px; animation: rise .6s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+
+.group > h2 {
+  font: 400 13px/1 var(--sans); letter-spacing: .16em;
+  color: var(--ink-faint); margin: 0 0 4px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.group-verdict {
+  font-family: var(--serif); font-size: 17px; line-height: 1.6;
+  padding: 16px 0 4px; color: var(--ink-dim);
+}
+.group-verdict.blocked { color: var(--ink); }
+.group-verdict .mark {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--lit); margin-right: 10px; vertical-align: 2px;
+}
+.group-verdict.blocked .mark { background: var(--cold); }
+
+/* ---------- 瓦片 ----------
+   网格 + 激活高亮：一屏看完，而且亮起来的那个把眼睛拽过去。 */
+.tiles {
+  display: grid; gap: 10px; margin-top: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(218px, 1fr));
+}
+.tile {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+  padding: 14px 15px 12px; position: relative; min-height: 78px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  transition: border-color .25s ease, background .25s ease, transform .12s ease;
+}
+.tile .t { font-size: 14.5px; line-height: 1.35; padding-right: 34px; }
+.tile .s { font-size: 13px; color: var(--cold); margin-top: 7px; }
+.tile .r {
+  font: 400 10.5px/1.4 var(--mono); color: var(--ink-faint);
+  margin-top: 5px; word-break: break-all; opacity: .75;
+}
+
+/* 开着的东西是暖的 —— 但只体现在状态字和开关上。
+   边框高亮是稀缺资源，留给「就是它挡住的」那一块；
+   开着是常态，一屏里五块都描边就等于没有高亮。 */
+.tile.on .s { color: var(--lit); }
+
+/* 就是它挡住的。整页唯一一块带描边的瓦片。 */
+.tile.culprit {
+  border-color: color-mix(in srgb, var(--cold-lit) 62%, transparent);
+  background: linear-gradient(color-mix(in srgb, var(--cold-lit) 7%, var(--panel)), var(--panel));
+  box-shadow: inset 3px 0 0 var(--cold-lit);
+}
+.tile.culprit .s { color: var(--cold-lit); }
+.tile.bad { border-color: color-mix(in srgb, var(--alarm) 55%, transparent); }
+.tile.bad .s { color: var(--alarm); }
+
+/* 能点的和不能点的必须一眼分得开，否则住户会去戳只读的卡片 */
+.tile.act { cursor: pointer; }
+.tile.act:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--lit) 40%, var(--line)); }
+.tile.act:focus-visible { outline: 2px solid var(--lit); outline-offset: 2px; }
+.tile.act[aria-busy="true"] { opacity: .5; cursor: wait; }
+
+.tile .sw {
+  position: absolute; top: 13px; right: 13px;
+  width: 38px; height: 21px; border-radius: 11px; pointer-events: none;
+  background: #241f1a; border: 1px solid var(--line); transition: background .25s, border-color .25s;
+}
+.tile .sw::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px;
+  border-radius: 50%; background: var(--ink-faint);
+  transition: transform .25s cubic-bezier(.3,1.4,.5,1), background .25s;
+}
+.tile.on .sw { background: color-mix(in srgb, var(--lit) 22%, #241f1a); border-color: color-mix(in srgb, var(--lit) 50%, transparent); }
+.tile.on .sw::after { transform: translateX(17px); background: var(--lit); box-shadow: 0 0 10px color-mix(in srgb, var(--lit) 60%, transparent); }
+
+/* 数值型只读：值本身就是主角 */
+.tile .num { font: 400 26px/1 var(--mono); color: var(--ink); margin-top: 8px; }
+
+/* ---------- 未归类 ---------- */
+details.spare { margin-top: 56px; border-top: 1px solid var(--line); padding-top: 18px; }
+details.spare > summary {
+  cursor: pointer; list-style: none; font: 400 12px/1 var(--sans);
+  letter-spacing: .16em; color: var(--ink-faint); padding: 6px 0;
+}
+details.spare > summary::-webkit-details-marker { display: none; }
+details.spare > summary::before { content: "＋ "; }
+details.spare[open] > summary::before { content: "－ "; }
+details.spare .note { color: var(--ink-faint); font-size: 13px; padding: 10px 0 4px; }
+
+/* ---------- 登录 ---------- */
+.gate { max-width: 460px; margin: 0 auto; padding: 96px 0 0; text-align: center; }
+.gate h1 { font: 400 30px/1.4 var(--serif); margin: 0 0 18px; }
+.gate ol { text-align: left; color: var(--ink-dim); font-size: 14px; line-height: 2; padding-left: 22px; margin: 26px 0 30px; }
+.gate ol b { color: var(--ink); font-weight: 400; }
+.code {
+  width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+  color: var(--ink); font: 400 30px/1 var(--mono); letter-spacing: .42em;
+  text-align: center; padding: 20px 0 20px .42em; outline: none;
+}
+.code:focus { border-color: color-mix(in srgb, var(--lit) 55%, transparent); }
+.btn {
+  margin-top: 14px; width: 100%; padding: 15px; cursor: pointer;
+  background: var(--lit); color: #17120b; border: none; border-radius: 3px;
+  font: 400 15px/1 var(--sans); letter-spacing: .1em;
+}
+.btn:disabled { opacity: .45; cursor: wait; }
+.err { color: var(--alarm); font-size: 13px; margin-top: 16px; min-height: 1.2em; }
+
+/* ---------- 页脚 ---------- */
+.foot {
+  margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; gap: 14px;
+  font-size: 13px; color: var(--ink-faint);
+}
+.foot .grow { flex: 1; }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+// token：从图标打开时带在 URL 上，存下来之后直接收藏这个地址也一直能用。
+const url = new URL(location.href);
+let TOKEN = url.searchParams.get('t');
+if (TOKEN) {
+  localStorage.setItem('dashToken', TOKEN);
+  history.replaceState(null, '', url.pathname);
+} else {
+  TOKEN = localStorage.getItem('dashToken');
+}
+
+const app = document.getElementById('app');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'x-dash-token': TOKEN ?? '', ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return r.json();
+}
+
+let timer = null;
+let lastFetch = null;
+
+function render(s) {
+  if (s.loggedIn === false) return renderGate();
+  if (!s.ok) return renderTrouble(s.error);
+
+  lastFetch = Date.now();
+  const groups = s.groups ?? [];
+  const blocked = groups.filter((g) => g.verdict?.blocked);
+  const broken = groups.some((g) => g.verdict?.unresolved?.length) ||
+                 groups.some((g) => g.cards.some((c) => c.missing));
+
+  document.body.dataset.mood = blocked.length ? 'cold' : 'warm';
+
+  // 顶部那行大字：有东西挡住就说是什么挡住的，没有就说一切正常。
+  const headline = blocked.length
+    ? `<em>${esc(blocked[0].verdict.say)}</em>`
+    : groups.some((g) => g.verdict)
+      ? `<em>一切正常</em>`
+      : `共 ${groups.reduce((n, g) => n + g.cards.length, 0)} 项`;
+
+  app.innerHTML = `
+    <div class="lamp">
+      <div class="eyebrow">米家极客版 · 模式看板</div>
+      ${blocked.length ? `<div class="where-line">${esc(blocked[0].title)}</div>` : ''}
+      <div class="verdict">${headline}</div>
+      ${blocked.length > 1 ? `<div class="also">另外 ${blocked.length - 1} 处也被挡住：${esc(blocked.slice(1).map((g) => g.title).join('、'))}</div>` : ''}
+      <div class="stamp"><span class="dot"></span><span id="ago">刚刚更新</span></div>
+    </div>
+    ${broken ? `<div class="group"><div class="group-verdict blocked" style="color:var(--alarm)">配置里引用的某些变量或规则在网关上已经不存在了 —— 下面标红的地方结论不可信。</div></div>` : ''}
+    ${groups.map(renderGroup).join('')}
+    ${renderSpare(s.unmapped)}
+    <div class="foot">
+      <span class="grow">写入记录留在 <code style="font-family:var(--mono)">~/Library/Application Support/MijiaDashboard/</code></span>
+      <label style="display:flex;align-items:center;gap:9px;cursor:pointer">开机自启
+        <input type="checkbox" id="autostart" style="accent-color:var(--lit);width:16px;height:16px">
+      </label>
+    </div>`;
+
+  wireToggles();
+  wireAutostart();
+  tickAgo();
+}
+
+function renderGroup(g) {
+  const v = g.verdict;
+  return `<section class="group">
+    <h2>${esc(g.title)}</h2>
+    ${v ? `<div class="group-verdict ${v.blocked ? 'blocked' : ''}"><span class="mark"></span>${esc(v.say)}${
+      v.unresolved.length ? ` <span style="color:var(--alarm)">（${esc(v.unresolved.join('、'))} 找不到）</span>` : ''
+    }</div>` : ''}
+    <div class="tiles">${g.cards.map(renderCard).join('')}</div>
+  </section>`;
+}
+
+function renderCard(c) {
+  const ref = c.kind === 'rule' ? `规则 ${esc(c.ruleId)}` : `${esc(c.scope)}.${esc(c.id)}`;
+  const head = `<div class="t">${esc(c.title)}</div>`;
+  const foot = `<div class="r">${ref}</div>`;
+
+  // 引用不到的东西要显眼地坏掉，不能显示成一个空值让人以为读到了。
+  if (c.missing) return `<div class="tile bad">${head}<div class="s">网关上没有这一项</div>${foot}</div>`;
+
+  const flag = c.culprit ? ' culprit' : '';
+
+  if (c.kind === 'rule')
+    return `<div class="tile${c.enable ? ' on' : ''}${flag}">${head}<div class="s">${c.enable ? '启用中' : '已停用'}</div>${foot}</div>`;
+
+  if (c.kind === 'toggle') {
+    const on = c.value === c.on;
+    // 整块可点（大命中区），但保留开关图形当作「这个能动」的明确信号 ——
+    // 只读瓦片没有这个图形，住户不会去白戳。
+    return `<div class="tile act${on ? ' on' : ''}${flag}" role="switch" tabindex="0" aria-checked="${on}"
+      data-scope="${esc(c.scope)}" data-id="${esc(c.id)}" data-want="${esc(on ? c.off : c.on)}">
+      <span class="sw"></span>${head}<div class="s">${on ? '已开启' : '已关闭'}</div>${foot}</div>`;
+  }
+
+  return `<div class="tile${flag}">${head}<div class="num">${esc(c.value)}</div>${foot}</div>`;
+}
+
+function renderSpare(u) {
+  if (!u || (!u.variables.length && !u.rules.length)) return '';
+  const tiles = [
+    ...u.rules.map((r) => ({ kind: 'rule', title: r.title, ruleId: r.ruleId, enable: r.enable })),
+    ...u.variables.map((v) => ({ kind: 'readonly', title: v.title, scope: v.scope, id: v.id, value: v.value })),
+  ];
+  return `<details class="spare">
+    <summary>未归类 ${tiles.length} 项</summary>
+    <div class="note">这些没有写进配置，所以没有分组也没有结论 —— 但不会被藏起来。</div>
+    <div class="tiles">${tiles.map(renderCard).join('')}</div>
+  </details>`;
+}
+
+// 会话过期是常态不是异常，所以登录做成首屏的样子。
+function renderGate(msg) {
+  document.body.dataset.mood = 'cold';
+  app.innerHTML = `<div class="gate">
+    <h1>要一个新的登录码</h1>
+    <p style="color:var(--ink-dim);font-size:14px;margin:0">中枢的登录码短时有效，隔一阵就要重取一次。</p>
+    <ol>
+      <li>打开<b>米家 App</b></li>
+      <li>进<b>中枢网关</b>那台设备</li>
+      <li>点<b>中枢功能 → 自动化极客版</b></li>
+      <li>抄下页面上那个<b>6 位数字</b></li>
+    </ol>
+    <input class="code" id="code" inputmode="numeric" maxlength="6" placeholder="······" autofocus>
+    <button class="btn" id="go">登录</button>
+    <div class="err" id="err">${esc(msg ?? '')}</div>
+  </div>`;
+
+  const code = document.getElementById('code');
+  const go = document.getElementById('go');
+  const err = document.getElementById('err');
+
+  const submit = async () => {
+    if (!/^\d{6}$/.test(code.value)) { err.textContent = '要 6 位数字'; return; }
+    go.disabled = true; err.textContent = '';
+    const r = await api('/api/login', { code: code.value }).catch((e) => ({ ok: false, error: e.message }));
+    go.disabled = false;
+    if (r.ok) return poll();
+    code.value = '';
+    err.textContent = r.error ?? '登录失败';
+  };
+
+  go.onclick = submit;
+  code.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  code.focus();
+}
+
+function renderTrouble(message) {
+  document.body.dataset.mood = 'cold';
+  app.innerHTML = `<div class="gate">
+    <h1>连不上中枢</h1>
+    <p style="color:var(--ink-dim);font-size:14px">${esc(message ?? '')}</p>
+    <p style="color:var(--ink-faint);font-size:13px;margin-top:24px">路由器和中枢网关都通电了吗？会自动重试。</p>
+  </div>`;
+}
+
+function wireToggles() {
+  for (const tile of app.querySelectorAll('.tile.act')) {
+    const fire = async () => {
+      if (tile.getAttribute('aria-busy') === 'true') return;
+      tile.setAttribute('aria-busy', 'true');
+      const r = await api('/api/variable', {
+        scope: tile.dataset.scope, id: tile.dataset.id, value: Number(tile.dataset.want),
+      }).catch((e) => ({ ok: false, error: e.message }));
+      tile.removeAttribute('aria-busy');
+      if (!r.ok) alert(r.error ?? '写入失败');
+      // 不做乐观更新：立刻重读，显示网关的真实值。
+      poll();
+    };
+    tile.onclick = fire;
+    tile.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); } };
+  }
+}
+
+function wireAutostart() {
+  const box = document.getElementById('autostart');
+  if (!box) return;
+  api('/api/autostart').then((r) => { if (r.ok) box.checked = r.enabled; });
+  box.onchange = async () => {
+    box.disabled = true;
+    const r = await api('/api/autostart', { enabled: box.checked });
+    box.disabled = false;
+    if (r.ok) box.checked = r.enabled;
+  };
+}
+
+function tickAgo() {
+  const el = document.getElementById('ago');
+  if (!el || !lastFetch) return;
+  const s = Math.round((Date.now() - lastFetch) / 1000);
+  el.textContent = s < 5 ? '刚刚更新' : `${s} 秒前更新`;
+}
+setInterval(tickAgo, 1000);
+
+async function poll() {
+  clearTimeout(timer);
+  try {
+    render(await api('/api/state'));
+  } catch (e) {
+    renderTrouble(e.message);
+  }
+  timer = setTimeout(poll, 10_000);
+}
+
+if (!TOKEN) {
+  app.innerHTML = `<div class="gate"><h1>请从应用图标打开</h1>
+    <p style="color:var(--ink-dim);font-size:14px">这个地址需要一个访问口令，直接输网址进不来。</p></div>`;
+} else {
+  poll();
+}
+</script>
+</body>
+</html>

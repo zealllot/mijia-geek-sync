@@ -110,3 +110,27 @@ test('三次都拿不到有效响应就抛出结构化错误', async () => {
   await assert.rejects(() => callXgg(['rule', 'list'], { run }), /rule list/);
   assert.equal(attempts, 3);
 });
+
+import { unwrap } from '../lib/gateway.mjs';
+
+test('ok:false 的响应不能被当成数据用', () => {
+  // 端到端时踩到的：未登录时 variable watch 返回 ok:false，
+  // normalizeSnapshot 拿到它、variables 退成 {}，
+  // 于是「没登录」被伪装成了「网关上什么都没有」，页面显示「一切正常，0 项」。
+  assert.throws(() => unwrap({ ok: false, error: { code: 'AUTH_REQUIRED', message: 'No session' } }, 'variable watch'));
+});
+
+test('抛出的错误带上 code，好让调用方分辨未登录和别的故障', () => {
+  try {
+    unwrap({ ok: false, error: { code: 'AUTH_REQUIRED', message: 'No session' } }, 'variable watch');
+    assert.fail('应该抛出');
+  } catch (e) {
+    assert.equal(e.code, 'AUTH_REQUIRED');
+    assert.match(e.message, /variable watch/);
+  }
+});
+
+test('正常响应原样放行', () => {
+  assert.deepEqual(unwrap({ rules: [] }, 'rule list'), { rules: [] });
+  assert.deepEqual(unwrap({ ok: true, scopes: [] }, 'variable list'), { ok: true, scopes: [] });
+});
