@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #8c3b2a; } a:hover { color: #6d2c1e; }
+  </style>
+</helmet>
+<div style="width: 1000px; height: 900px; background: #f3efe6; color: #1e1b16; font-family: 'PingFang SC', 'Hiragino Sans GB', sans-serif; padding: 56px 72px; box-sizing: border-box; display: flex; flex-direction: column;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #1e1b16; padding-bottom: 12px;">
+    <span style="font-family: 'Songti SC', STSong, serif; font-size: 21px; letter-spacing: 0.14em;">方向 B — 纸质通知</span>
+    <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.14em; color: #6f6658;">1302 &#183; 09-05 19:42</span>
+  </div>
+
+  <div style="display: flex; gap: 26px; align-items: flex-start; margin-top: 40px;">
+    <div style="flex: 0 0 auto; width: 84px; height: 84px; border: 2px solid #8c3b2a; border-radius: 50%; color: #8c3b2a; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Songti SC', STSong, serif; line-height: 1.15; transform: rotate(-8deg);">
+      <span style="font-size: 22px; letter-spacing: 0.04em;">受阻</span>
+      <span style="font-size: 10px; letter-spacing: 0.2em; margin-top: 3px;">BLOCKED</span>
+    </div>
+    <div style="flex-grow: 1;">
+      <div style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.22em; color: #6f6658; margin-bottom: 10px;">客厅灯光</div>
+      <div style="font-family: 'Songti SC', STSong, serif; font-size: 40px; line-height: 1.42; letter-spacing: 0.01em; max-width: 16em;">观影模式开着，会压制客厅自动亮灯。</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 44px; border-top: 1px solid #cdc4b2;">
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.18em; color: #6f6658; padding: 11px 0; border-bottom: 1px solid #cdc4b2;">
+      <span>项目</span><span>当前</span><span style="text-align: right;">标识</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; align-items: baseline; padding: 15px 0; border-bottom: 1px solid #e0d8c8;">
+      <span style="font-size: 16px;">全屋自动化总开关</span>
+      <span style="font-family: 'Songti SC', STSong, serif; font-size: 18px;">已开启</span>
+      <span style="text-align: right; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #8f8776;">xggAutoMaster</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; align-items: baseline; padding: 15px 0; border-bottom: 1px solid #e0d8c8; box-shadow: inset 4px 0 0 #8c3b2a; padding-left: 16px; margin-left: -16px;">
+      <span style="font-size: 16px; font-weight: 600;">观影模式</span>
+      <span style="font-family: 'Songti SC', STSong, serif; font-size: 18px; color: #8c3b2a;">已开启</span>
+      <span style="text-align: right; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #8f8776;">xggCinema</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; align-items: baseline; padding: 15px 0; border-bottom: 1px solid #e0d8c8;">
+      <span style="font-size: 16px;">灯光手动锁</span>
+      <span style="font-family: 'Songti SC', STSong, serif; font-size: 18px; color: #7b7264;">已关闭</span>
+      <span style="text-align: right; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #8f8776;">xggManualLock</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; align-items: baseline; padding: 15px 0; border-bottom: 1px solid #e0d8c8;">
+      <span style="font-size: 16px;">客厅照度阈值</span>
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 19px;">55</span>
+      <span style="text-align: right; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #8f8776;">xggLivingLux</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; align-items: baseline; padding: 15px 0; border-bottom: 1px solid #e0d8c8;">
+      <span style="font-size: 16px;">规则 &#183; 光亮灯灭</span>
+      <span style="font-family: 'Songti SC', STSong, serif; font-size: 18px;">启用中</span>
+      <span style="text-align: right; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #8f8776;">20260822110</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; align-items: baseline; padding: 15px 0;">
+      <span style="font-size: 16px;">规则 &#183; 观影联动</span>
+      <span style="font-family: 'Songti SC', STSong, serif; font-size: 18px;">启用中</span>
+      <span style="text-align: right; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: #8f8776;">20260822270</span>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div style="border-top: 2px solid #1e1b16; padding-top: 13px; display: flex; justify-content: space-between; font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #6f6658;">
+    <span>卧室 &#183; 一切正常</span>
+    <span>未归类 4 项</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

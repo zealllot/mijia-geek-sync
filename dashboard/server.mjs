@@ -42,9 +42,12 @@ const TOKEN = loadToken();
 // ---------- 网关地址 ----------
 async function baseUrl() {
   if (process.env.MGS_DASH_BASE_URL) return process.env.MGS_DASH_BASE_URL;
-  const p = join(STATE_DIR, 'gateway.json');
-  if (!existsSync(p)) throw new Error(`还没配网关：写一份 ${p}，内容形如 {"mdns":"...","fallback":"192.168.1.100"}`);
-  return resolveGateway(JSON.parse(readFileSync(p, 'utf8')));
+  // 用户可写的配置优先；.app 里带一份打包时写死的默认值兜底。
+  // bundle 内部是只读的（换版本会被整个替换），所以真正的配置放 Application Support。
+  for (const p of [join(STATE_DIR, 'gateway.json'), join(HERE, 'config', 'gateway.json')]) {
+    if (existsSync(p)) return resolveGateway(JSON.parse(readFileSync(p, 'utf8')));
+  }
+  throw new Error(`还没配网关：写一份 ${join(STATE_DIR, 'gateway.json')}，内容形如 {"mdns":"...","fallback":"192.168.1.100"}`);
 }
 
 function xggCli() {
@@ -141,6 +144,12 @@ const routes = {
 
     // 不做乐观更新：立刻重读，页面显示网关的真实值。
     cache.invalidate();
+    return { ok: true };
+  },
+
+  // 脚本型 .app 在 Dock 上不一定收得到 Cmd-Q，所以页面上给一个明确的出口。
+  async 'POST /api/quit'() {
+    setTimeout(() => process.exit(0), 120);
     return { ok: true };
   },
 

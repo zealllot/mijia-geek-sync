@@ -1,0 +1,81 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "看板"
+    },
+    {
+      "id": "page-2",
+      "name": "先前的方向"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "page": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 900,
+      "title": "模式看板"
+    },
+    {
+      "file": "DirectionA.dc.html",
+      "page": "page-2",
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 900,
+      "title": "方向 A · 站牌"
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "page": "page-2",
+      "x": 1120,
+      "y": 0,
+      "w": 1000,
+      "h": 900,
+      "title": "方向 B · 纸质通知"
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "page": "page-2",
+      "x": 0,
+      "y": 1080,
+      "w": 1000,
+      "h": 900,
+      "title": "方向 C · 控制台"
+    },
+    {
+      "file": "DirectionD.dc.html",
+      "page": "page-2",
+      "x": 1120,
+      "y": 1080,
+      "w": 1000,
+      "h": 900,
+      "title": "方向 D · 房间图示"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-main",
+      "x": 0,
+      "y": -230,
+      "w": 1000,
+      "page": "page-1",
+      "text": "照「阈值压着了会不会写通」那个问题改的 —— 会，而且是错的。现在是四态。\n\n状态判定完整复刻了 1302 开灯规则的闸门链（yang-home/docs/reference/dual-lux-and-manual-lock.md）：\n  总闸 ziDongHua → 模式闸 观影/睡眠 → 手动锁 shouDong<区> → 本地照度<100 或 全局照度<区阈值\n整条链全是可读的全局变量，阈值是图里的常量（pull 时抠出来，不用手写）。\n\n「够亮了」用冷蓝不用橙 —— 它不是毛病，是自动化判断对了。橙色只留给真的有东西压着。\n\n右边把五道闸按规则里的真实顺序列出来，断在哪一道就标哪一道，之后的标灰写「没走到这一步」。\n\n唯一读不到的是 A2「灯是不是已经亮着」（deviceGet 设备属性）。对「为什么不亮」不影响 —— 人来问的时候灯本来就是灭的。\n\n照度探针 loop 300000 = 5 分钟一采，所以照度最旧 5 分钟，页面明写采样时间，不装作实时。"
+    },
+    {
+      "id": "note-old",
+      "x": 0,
+      "y": -190,
+      "w": 2120,
+      "page": "page-2",
+      "text": "四个初始方向，留作参考。最终取了 C 的视觉语言和 D 的房间结构。"
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

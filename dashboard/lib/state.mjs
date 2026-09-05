@@ -1,4 +1,5 @@
 import { evaluateVerdict } from './verdict.mjs';
+import { evaluateRoom } from './room.mjs';
 
 // 把「语义地图 + 网关快照」合成前端直接能画的视图模型。
 //
@@ -33,7 +34,39 @@ function mappedView(config, snapshot) {
     .filter((c) => c.kind === 'toggle')
     .map((c) => `${c.scope}.${c.id}`);
 
-  return { groups, unmapped: unmappedOf(config, snapshot), writable, fetchedAt: snapshot.fetchedAt };
+  const floorplan = floorplanOf(config, snapshot);
+
+  return {
+    groups,
+    floorplan,
+    headline: floorplan ? headlineOf(floorplan.rooms) : null,
+    unmapped: unmappedOf(config, snapshot),
+    writable,
+    fetchedAt: snapshot.fetchedAt,
+  };
+}
+
+// 逐间求值。位置原样带出去 —— 前端只负责画，不算布局。
+function floorplanOf(config, snapshot) {
+  const fp = config.floorplan;
+  if (!fp) return null;
+  return {
+    columns: fp.columns,
+    rows: fp.rows,
+    rooms: fp.rooms.map((r) => ({ ...r, ...evaluateRoom(r, snapshot) })),
+  };
+}
+
+// 顶部那句话。受阻的排在前面 —— 「够亮了」不是毛病，不该抢标题。
+function headlineOf(rooms) {
+  const blocked = rooms.filter((r) => r.state === 'blocked');
+  if (!blocked.length) return { title: null, state: 'clear', say: '一切正常', alsoBlocked: [] };
+  return {
+    title: blocked[0].title,
+    state: 'blocked',
+    say: blocked[0].say,
+    alsoBlocked: blocked.slice(1).map((r) => r.title),
+  };
 }
 
 // 兜底：所有没被任何卡片引用到的变量和规则。
@@ -103,7 +136,7 @@ function flatView(snapshot) {
     })),
   });
 
-  return { groups, unmapped: null, writable: [], fetchedAt: snapshot.fetchedAt };
+  return { groups, floorplan: null, headline: null, unmapped: null, writable: [], fetchedAt: snapshot.fetchedAt };
 }
 
 // 写入闸门。

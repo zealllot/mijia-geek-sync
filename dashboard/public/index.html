@@ -258,6 +258,7 @@ function render(s) {
     ${renderSpare(s.unmapped)}
     <div class="foot">
       <span class="grow">写入记录留在 <code style="font-family:var(--mono)">~/Library/Application Support/MijiaDashboard/</code></span>
+      <button id="quit" style="background:none;border:1px solid var(--line);color:var(--ink-faint);border-radius:3px;padding:6px 12px;cursor:pointer;font:inherit;font-size:13px">退出</button>
       <label style="display:flex;align-items:center;gap:9px;cursor:pointer">开机自启
         <input type="checkbox" id="autostart" style="accent-color:var(--lit);width:16px;height:16px">
       </label>
@@ -265,6 +266,7 @@ function render(s) {
 
   wireToggles();
   wireAutostart();
+  wireQuit();
   tickAgo();
 }
 
@@ -389,6 +391,20 @@ function wireAutostart() {
     const r = await api('/api/autostart', { enabled: box.checked });
     box.disabled = false;
     if (r.ok) box.checked = r.enabled;
+  };
+}
+
+function wireQuit() {
+  const b = document.getElementById('quit');
+  if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true;
+    b.textContent = '已退出';
+    await api('/api/quit', {}).catch(() => {});
+    clearTimeout(timer);
+    document.body.dataset.mood = 'cold';
+    app.innerHTML = `<div class="gate"><h1>看板已退出</h1>
+      <p style="color:var(--ink-dim);font-size:14px">要再看，从「应用程序」里重新打开「模式看板」。</p></div>`;
   };
 }
 

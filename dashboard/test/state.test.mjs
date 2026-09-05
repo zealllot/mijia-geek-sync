@@ -200,3 +200,63 @@ test('没被挡住时一张 culprit 都没有', () => {
 
   assert.equal(view.groups[0].cards.some((c) => c.culprit), false);
 });
+
+const floorplanCfg = {
+  floorplan: {
+    columns: ['186px', '296px'],
+    rows: ['116px', '116px', '78px', '172px'],
+    rooms: [
+      { title: '卧室', col: 1, row: 1, chain: [{ scope: 'global', id: 'xggCinema', equals: 0, title: '观影模式', say: '观影模式开着' }] },
+      { title: '客厅', col: 1, row: 2, chain: [{ scope: 'global', id: 'xggCinema', equals: 1, title: '观影模式', say: '观影模式关着' }] },
+      { title: '主卫', col: 2, row: 3 },
+    ],
+  },
+  groups: [],
+};
+
+test('配置里有 floorplan 时，视图带上逐间求值过的房间', () => {
+  const view = buildView(floorplanCfg, snapshot);
+
+  assert.deepEqual(
+    view.floorplan.rooms.map((r) => [r.title, r.state]),
+    [['卧室', 'clear'], ['客厅', 'blocked'], ['主卫', 'unconfigured']],
+  );
+});
+
+test('房间保留网格位置，前端不用自己算', () => {
+  const view = buildView(floorplanCfg, snapshot);
+
+  assert.deepEqual(view.floorplan.rooms[2], {
+    title: '主卫', col: 2, row: 3, state: 'unconfigured', say: '未配置', chain: [], lux: null, unresolved: [],
+  });
+});
+
+test('顶部结论取第一个受阻的房间', () => {
+  const view = buildView(floorplanCfg, snapshot);
+
+  assert.deepEqual(view.headline, { title: '客厅', state: 'blocked', say: '观影模式关着', alsoBlocked: [] });
+});
+
+test('多个房间受阻时顶部列出其余的名字', () => {
+  const two = { ...floorplanCfg, floorplan: { ...floorplanCfg.floorplan, rooms: [
+    { title: '客厅', col: 1, row: 1, chain: [{ scope: 'global', id: 'xggCinema', equals: 1, title: 'x', say: '客厅受阻' }] },
+    { title: '主卧', col: 1, row: 2, chain: [{ scope: 'global', id: 'xggCinema', equals: 1, title: 'x', say: '主卧受阻' }] },
+  ] } };
+
+  assert.deepEqual(buildView(two, snapshot).headline.alsoBlocked, ['主卧']);
+});
+
+test('没有房间受阻时顶部说一切正常', () => {
+  const ok = { ...floorplanCfg, floorplan: { ...floorplanCfg.floorplan, rooms: [
+    { title: '卧室', col: 1, row: 1, chain: [{ scope: 'global', id: 'xggCinema', equals: 0, title: 'x', say: 'y' }] },
+  ] } };
+
+  assert.equal(buildView(ok, snapshot).headline.state, 'clear');
+});
+
+test('没有 floorplan 的配置照常工作，不带房间', () => {
+  const view = buildView(config, snapshot);
+
+  assert.equal(view.floorplan, null);
+  assert.equal(view.headline, null);
+});

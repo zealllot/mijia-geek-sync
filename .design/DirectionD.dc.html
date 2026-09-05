@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #e0a253; } a:hover { color: #f0bd7c; }
+  </style>
+</helmet>
+<div style="width: 1000px; height: 900px; background: #16171a; color: #e4e2de; font-family: 'PingFang SC', 'Hiragino Sans GB', sans-serif; padding: 44px 52px; box-sizing: border-box; display: flex; flex-direction: column;">
+
+  <div style="font-family: 'SF Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.22em; color: #6a6862; margin-bottom: 30px;">方向 D — 房间图示</div>
+
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="flex: 0 0 auto; display: grid; grid-template-columns: repeat(3, 132px); grid-auto-rows: 108px; gap: 8px;">
+      <div style="grid-column: span 2; background: #23242a; border: 1.5px solid #7e8f99; box-shadow: inset 0 0 30px #7e8f9922; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #eef1f3;">客厅</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #7e8f99;">受阻</span>
+      </div>
+      <div style="background: #2b2519; border: 1px solid #4a3d24; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #e0a253;">餐厅</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #8a7040;">亮</span>
+      </div>
+
+      <div style="background: #1b1c1f; border: 1px solid #2a2b2f; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #6f6d68;">玄关</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #4c4a46;">灭</span>
+      </div>
+      <div style="background: #2b2519; border: 1px solid #4a3d24; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #e0a253;">厨房</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #8a7040;">亮</span>
+      </div>
+      <div style="background: #1b1c1f; border: 1px solid #2a2b2f; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #6f6d68;">主卫</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #4c4a46;">灭</span>
+      </div>
+
+      <div style="background: #1b1c1f; border: 1px solid #2a2b2f; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #6f6d68;">主卧</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #4c4a46;">灭</span>
+      </div>
+      <div style="background: #1b1c1f; border: 1px solid #2a2b2f; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #6f6d68;">儿童房</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #4c4a46;">灭</span>
+      </div>
+      <div style="background: #1b1c1f; border: 1px solid #2a2b2f; display: flex; flex-direction: column; justify-content: space-between; padding: 13px;">
+        <span style="font-size: 15px; color: #6f6d68;">老人房</span>
+        <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #4c4a46;">灭</span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; min-width: 0;">
+      <div style="font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.22em; color: #6a6862;">选中 &#183; 客厅</div>
+      <div style="font-size: 31px; line-height: 1.42; color: #cdd8de; margin-top: 14px; letter-spacing: 0.01em;">观影模式开着，会压制客厅自动亮灯</div>
+
+      <div style="margin-top: 30px; display: flex; flex-direction: column; gap: 7px;">
+        <div style="display: flex; align-items: center; gap: 12px; background: #1e1f23; border: 1px solid #2c2d32; padding: 12px 14px;">
+          <span style="flex-grow: 1; font-size: 14.5px; color: #b9b6b0;">全屋自动化总开关</span>
+          <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: #e0a253;">开</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; background: #22262a; border: 1.5px solid #7e8f99; padding: 12px 14px;">
+          <span style="flex-grow: 1; font-size: 14.5px; color: #eef1f3;">观影模式</span>
+          <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: #9fb2bd;">开 &#183; 就是它</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; background: #1e1f23; border: 1px solid #2c2d32; padding: 12px 14px;">
+          <span style="flex-grow: 1; font-size: 14.5px; color: #b9b6b0;">灯光手动锁</span>
+          <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: #6a6862;">关</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; background: #1e1f23; border: 1px solid #2c2d32; padding: 12px 14px;">
+          <span style="flex-grow: 1; font-size: 14.5px; color: #b9b6b0;">规则 &#183; 光亮灯灭</span>
+          <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: #e0a253;">启用中</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; background: #1e1f23; border: 1px solid #2c2d32; padding: 12px 14px;">
+          <span style="flex-grow: 1; font-size: 14.5px; color: #b9b6b0;">客厅照度阈值</span>
+          <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: #b9b6b0;">55</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div style="display: flex; gap: 22px; align-items: center; border-top: 1px solid #26272b; padding-top: 15px; font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #56544f;">
+    <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 11px; height: 11px; background: #2b2519; border: 1px solid #4a3d24;"></span>亮</span>
+    <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 11px; height: 11px; background: #1b1c1f; border: 1px solid #2a2b2f;"></span>灭</span>
+    <span style="display: flex; align-items: center; gap: 7px;"><span style="width: 11px; height: 11px; background: #23242a; border: 1.5px solid #7e8f99;"></span>受阻</span>
+    <span style="flex-grow: 1;"></span>
+    <span>房间布局需为每户手写一次</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #4ade9a; } a:hover { color: #8af0bd; }
+  </style>
+</helmet>
+<div style="width: 1000px; height: 900px; background: #0d1013; color: #c8d2d8; font-family: 'SF Mono', Menlo, monospace; padding: 0; box-sizing: border-box; display: flex; flex-direction: column;">
+
+  <div style="display: flex; align-items: center; gap: 14px; padding: 14px 24px; background: #141a1f; border-bottom: 1px solid #232c33; font-size: 11px; letter-spacing: 0.18em; color: #61727c;">
+    <span style="width: 8px; height: 8px; border-radius: 50%; background: #d97757; box-shadow: 0 0 8px #d9775788;"></span>
+    <span>方向 C — 控制台</span>
+    <span style="flex-grow: 1;"></span>
+    <span>GW 192.168.5.25</span>
+    <span style="color: #2e3941;">|</span>
+    <span>19:42:07</span>
+  </div>
+
+  <div style="padding: 22px 24px 20px; border-bottom: 1px solid #1a2126; background: linear-gradient(#12181d, #0d1013);">
+    <div style="font-size: 10.5px; letter-spacing: 0.24em; color: #55656e; margin-bottom: 11px;">CH01 &#183; 客厅灯光</div>
+    <div style="font-family: 'PingFang SC', sans-serif; font-size: 30px; line-height: 1.4; color: #e6edf1; letter-spacing: 0.01em;">观影模式开着，会压制客厅自动亮灯</div>
+    <div style="margin-top: 12px; font-size: 11px; letter-spacing: 0.14em; color: #d97757;">&#9679; CULPRIT &#8594; global.xggCinema = 1</div>
+  </div>
+
+  <div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 18px;">
+
+    <div>
+      <div style="font-size: 10px; letter-spacing: 0.26em; color: #4a5860; margin-bottom: 9px;">CH01 &#183; 客厅灯光</div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px;">
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 11px 12px;">
+          <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #4ade9a; box-shadow: 0 0 7px #4ade9a99;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #dbe4e9;">自动化总开关</span></div>
+          <div style="margin-top: 8px; font-size: 16px; color: #4ade9a;">ON</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #46545c;">xggAutoMaster</div>
+        </div>
+        <div style="background: #1a1512; border: 1px solid #d9775777; padding: 11px 12px; box-shadow: inset 0 0 22px #d9775718;">
+          <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #d97757; box-shadow: 0 0 9px #d97757;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #f2e6e1;">观影模式</span></div>
+          <div style="margin-top: 8px; font-size: 16px; color: #d97757;">ON</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #7d5f52;">xggCinema</div>
+        </div>
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 11px 12px;">
+          <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #2a343a;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #8b979e;">灯光手动锁</span></div>
+          <div style="margin-top: 8px; font-size: 16px; color: #55656e;">OFF</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #46545c;">xggManualLock</div>
+        </div>
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 11px 12px;">
+          <div style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #8b979e;">照度阈值</div>
+          <div style="margin-top: 8px; font-size: 20px; color: #dbe4e9;">55</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #46545c;">xggLivingLux</div>
+        </div>
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 11px 12px;">
+          <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #4ade9a; box-shadow: 0 0 7px #4ade9a99;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #dbe4e9;">光亮灯灭</span></div>
+          <div style="margin-top: 8px; font-size: 13px; color: #4ade9a;">RULE ON</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #46545c;">20260822110</div>
+        </div>
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 11px 12px;">
+          <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #4ade9a; box-shadow: 0 0 7px #4ade9a99;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #dbe4e9;">观影联动</span></div>
+          <div style="margin-top: 8px; font-size: 13px; color: #4ade9a;">RULE ON</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #46545c;">20260822270</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size: 10px; letter-spacing: 0.26em; color: #4a5860; margin-bottom: 9px;">CH02 &#183; 卧室 &#8212; NOMINAL</div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px;">
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 11px 12px;">
+          <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #2a343a;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #8b979e;">睡眠模式</span></div>
+          <div style="margin-top: 8px; font-size: 16px; color: #55656e;">OFF</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #46545c;">xggSleep</div>
+        </div>
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 11px 12px;">
+          <div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #4ade9a; box-shadow: 0 0 7px #4ade9a99;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #dbe4e9;">夜灯</span></div>
+          <div style="margin-top: 8px; font-size: 13px; color: #4ade9a;">RULE ON</div>
+          <div style="margin-top: 5px; font-size: 9.5px; color: #46545c;">20260822415</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div style="padding: 11px 24px; background: #141a1f; border-top: 1px solid #232c33; display: flex; gap: 22px; font-size: 10px; letter-spacing: 0.16em; color: #4a5860;">
+    <span>VARS 8</span><span>RULES 4</span><span>UNMAPPED 4</span><span style="flex-grow: 1;"></span><span>POLL 10s</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

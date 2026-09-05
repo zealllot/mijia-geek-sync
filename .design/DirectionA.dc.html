@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #ffb020; } a:hover { color: #ffc95c; }
+  </style>
+</helmet>
+<div style="width: 1000px; height: 900px; background: #000000; color: #f2f0ed; font-family: 'PingFang SC', 'Hiragino Sans GB', sans-serif; padding: 54px 60px; box-sizing: border-box; display: flex; flex-direction: column; gap: 0;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.24em; color: #5c5852;">
+    <span>方向 A — 站牌</span>
+    <span>19:42</span>
+  </div>
+
+  <div style="height: 1px; background: #221f1c; margin: 18px 0 44px;"></div>
+
+  <div style="font-family: 'SF Mono', Menlo, monospace; font-size: 12px; letter-spacing: 0.2em; color: #6b6660; margin-bottom: 18px;">客厅灯光</div>
+  <div style="font-size: 62px; line-height: 1.16; font-weight: 600; letter-spacing: -0.01em; color: #7f929c; max-width: 15em;">观影模式开着<br>会压制客厅自动亮灯</div>
+
+  <div style="height: 1px; background: #221f1c; margin: 46px 0 0;"></div>
+
+  <div style="display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: baseline; gap: 16px; padding: 19px 0; border-bottom: 1px solid #17150f;">
+      <span style="font-size: 19px; color: #a49d94;">全屋自动化总开关</span>
+      <span style="flex-grow: 1; border-bottom: 1px dotted #2b2823; transform: translateY(-5px);"></span>
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 15px; letter-spacing: 0.12em; color: #ffb020;">开</span>
+    </div>
+
+    <div style="display: flex; align-items: baseline; gap: 16px; padding: 19px 0; border-bottom: 1px solid #17150f; background: #0b0d0e; margin: 0 -18px; padding-left: 18px; padding-right: 18px;">
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 15px; color: #7f929c;">&#9654;</span>
+      <span style="font-size: 19px; color: #eef2f4; font-weight: 500;">观影模式</span>
+      <span style="flex-grow: 1; border-bottom: 1px dotted #33383b; transform: translateY(-5px);"></span>
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 15px; letter-spacing: 0.12em; color: #7f929c;">开 &#183; 就是它</span>
+    </div>
+
+    <div style="display: flex; align-items: baseline; gap: 16px; padding: 19px 0; border-bottom: 1px solid #17150f;">
+      <span style="font-size: 19px; color: #a49d94;">灯光手动锁</span>
+      <span style="flex-grow: 1; border-bottom: 1px dotted #2b2823; transform: translateY(-5px);"></span>
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 15px; letter-spacing: 0.12em; color: #4f4a44;">关</span>
+    </div>
+
+    <div style="display: flex; align-items: baseline; gap: 16px; padding: 19px 0; border-bottom: 1px solid #17150f;">
+      <span style="font-size: 19px; color: #a49d94;">客厅照度阈值</span>
+      <span style="flex-grow: 1; border-bottom: 1px dotted #2b2823; transform: translateY(-5px);"></span>
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 15px; color: #a49d94;">55</span>
+    </div>
+
+    <div style="display: flex; align-items: baseline; gap: 16px; padding: 19px 0; border-bottom: 1px solid #17150f;">
+      <span style="font-size: 19px; color: #a49d94;">规则 &#183; 光亮灯灭</span>
+      <span style="flex-grow: 1; border-bottom: 1px dotted #2b2823; transform: translateY(-5px);"></span>
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 15px; letter-spacing: 0.12em; color: #ffb020;">启用中</span>
+    </div>
+
+    <div style="display: flex; align-items: baseline; gap: 16px; padding: 19px 0;">
+      <span style="font-size: 19px; color: #a49d94;">规则 &#183; 观影联动</span>
+      <span style="flex-grow: 1; border-bottom: 1px dotted #2b2823; transform: translateY(-5px);"></span>
+      <span style="font-family: 'SF Mono', Menlo, monospace; font-size: 15px; letter-spacing: 0.12em; color: #ffb020;">启用中</span>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1;"></div>
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.16em; color: #3d3934; border-top: 1px solid #17150f; padding-top: 16px;">
+    <span>卧室 &#183; 一切正常</span>
+    <span>刚刚更新</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

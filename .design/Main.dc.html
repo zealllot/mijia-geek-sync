@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; }
+    a { color: #4ade9a; } a:hover { color: #8af0bd; }
+  </style>
+</helmet>
+<div style="width: 1000px; height: 900px; background: #0d1013; color: #c8d2d8; font-family: 'SF Mono', Menlo, monospace; display: flex; flex-direction: column; box-sizing: border-box;">
+
+  <div style="display: flex; align-items: center; gap: 13px; padding: 13px 22px; background: #141a1f; border-bottom: 1px solid #232c33; font-size: 11px; letter-spacing: 0.18em; color: #61727c;">
+    <span style="width: 8px; height: 8px; border-radius: 50%; background: #d97757; box-shadow: 0 0 8px #d9775788;"></span>
+    <span style="font-family: 'PingFang SC', sans-serif; letter-spacing: 0.14em; color: #8fa0aa;">模式看板</span>
+    <span style="flex-grow: 1;"></span>
+    <span>1302</span><span style="color: #2e3941;">|</span><span>19:42:07</span>
+  </div>
+
+  <div style="padding: 20px 22px 18px; border-bottom: 1px solid #1a2126; background: linear-gradient(#12181d, #0d1013);">
+    <div style="font-size: 10px; letter-spacing: 0.26em; color: #55656e; margin-bottom: 10px;">客厅 &#183; 自动化受阻</div>
+    <div style="font-family: 'PingFang SC', sans-serif; font-size: 29px; line-height: 1.38; color: #e6edf1; letter-spacing: 0.01em;">观影模式开着，会压制客厅自动亮灯</div>
+    <div style="margin-top: 11px; font-size: 10.5px; letter-spacing: 0.14em; color: #6b93b0;">主卧另有一种情况：够亮了，自动化判断不需要开</div>
+  </div>
+
+  <div style="display: flex; gap: 22px; padding: 20px 22px; flex-grow: 1; min-height: 0;">
+
+    <div style="flex: 0 0 auto; display: flex; flex-direction: column;">
+      <div style="font-size: 10px; letter-spacing: 0.26em; color: #4a5860; margin-bottom: 11px;">1302</div>
+      <div style="display: grid; grid-template-columns: 186px 296px; grid-template-rows: 116px 116px 78px 172px; gap: 6px;">
+        <div style="grid-column: 1; grid-row: 1; background: #141a1f; border: 1px solid #222b31; padding: 12px 13px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #4ade9a; box-shadow: 0 0 11px #4ade9a;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 15px; color: #c8d3d9;">卧室</span></div><div style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 10.5px; letter-spacing: 0.12em; color: #4a5860;">没发现阻碍</span><span style="font-size: 9.5px; letter-spacing: 0.1em; color: #3f4c55;">本地 8 · 区阈值 800</span></div></div><div style="grid-column: 1; grid-row: 2; background: #1a1512; border: 1.5px solid #d97757; box-shadow: inset 0 0 34px #d9775722; padding: 12px 13px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display: flex; align-items: center; gap: 7px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #d97757; box-shadow: 0 0 11px #d97757;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 16px; color: #f7ece7; font-weight: 500;">客厅</span></div><div style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 10.5px; letter-spacing: 0.12em; color: #d97757;">受阻 · 观影模式</span><span style="font-size: 9.5px; letter-spacing: 0.1em; color: #3f4c55;">本地 45 · 区阈值 1000</span></div></div><div style="grid-column: 1; grid-row: 3 / span 2; background: #141b21; border: 1px solid #2b3a44; padding: 12px 13px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #6b93b0; box-shadow: 0 0 11px #6b93b0;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 15px; color: #c8d3d9;">主卧</span></div><div style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 10.5px; letter-spacing: 0.12em; color: #6b93b0;">够亮了 · 不需要开</span><span style="font-size: 9.5px; letter-spacing: 0.1em; color: #3f4c55;">本地 210 · 区阈值 412</span></div></div><div style="grid-column: 2; grid-row: 3; background: #101418; border: 1px dashed #202830; padding: 12px 13px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #26313a;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 15px; color: #4f5c65;">主卫</span></div><div style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 10.5px; letter-spacing: 0.12em; color: #26313a;">未配置</span></div></div><div style="grid-column: 2; grid-row: 4; background: #141a1f; border: 1px solid #222b31; padding: 12px 13px; display: flex; flex-direction: column; justify-content: space-between;"><div style="display: flex; align-items: center; gap: 7px;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #4ade9a; box-shadow: 0 0 11px #4ade9a;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 15px; color: #c8d3d9;">衣帽间</span></div><div style="display: flex; flex-direction: column; gap: 3px;"><span style="font-size: 10.5px; letter-spacing: 0.12em; color: #4a5860;">没发现阻碍</span><span style="font-size: 9.5px; letter-spacing: 0.1em; color: #3f4c55;">本地 15 · 区阈值 500</span></div></div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 9.5px; letter-spacing: 0.1em; color: #46545c;">
+        <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ade9a;"></span>没发现阻碍</span>
+        <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #6b93b0;"></span>够亮了</span>
+        <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #d97757;"></span>受阻</span>
+        <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #26313a;"></span>未配置</span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column;">
+      <div style="font-size: 10px; letter-spacing: 0.26em; color: #4a5860; margin-bottom: 11px;">客厅 &#183; 开灯要过的五道 &#183; 规则 20260822160</div>
+      <div style="display: flex; flex-direction: column; gap: 5px;">
+        <div style="background: #141a1f; border: 1px solid #222b31; padding: 10px 13px; display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4ade9a;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #c3ced4; flex: 0 0 118px;">灯光自动化总开关</span><span style="font-size: 10.5px; color: #46545c; flex-grow: 1;">ziDongHua == 1</span><span style="font-size: 10.5px; letter-spacing: 0.1em; color: #4a5860;">通过</span></div><div style="background: #1a1512; border: 1px solid #d9775788; padding: 10px 13px; display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #d97757;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #f2e6e1; flex: 0 0 118px;">观影模式</span><span style="font-size: 10.5px; color: #46545c; flex-grow: 1;">guanYing == 0</span><span style="font-size: 10.5px; letter-spacing: 0.1em; color: #d97757;">断在这里 · 现在是 1</span></div><div style="background: #0f1317; border: 1px solid #1b2228; padding: 10px 13px; display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #242c33;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #5c6970; flex: 0 0 118px;">进门手动锁</span><span style="font-size: 10.5px; color: #46545c; flex-grow: 1;">shouDongJinMen == 0</span><span style="font-size: 10.5px; letter-spacing: 0.1em; color: #3d474e;">没走到这一步</span></div><div style="background: #0f1317; border: 1px solid #1b2228; padding: 10px 13px; display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #242c33;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #5c6970; flex: 0 0 118px;">本地照度 < 100</span><span style="font-size: 10.5px; color: #46545c; flex-grow: 1;">luxJinMen = 45</span><span style="font-size: 10.5px; letter-spacing: 0.1em; color: #3d474e;">没走到这一步</span></div><div style="background: #0f1317; border: 1px solid #1b2228; padding: 10px 13px; display: flex; align-items: center; gap: 10px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #242c33;"></span><span style="font-family: 'PingFang SC', sans-serif; font-size: 13px; color: #5c6970; flex: 0 0 118px;">全局照度 < 1000</span><span style="font-size: 10.5px; color: #46545c; flex-grow: 1;">luxQuanJu = 620</span><span style="font-size: 10.5px; letter-spacing: 0.1em; color: #3d474e;">没走到这一步</span></div>
+      </div>
+      <div style="margin-top: 14px; font-size: 9.5px; line-height: 1.75; color: #3f4c55; letter-spacing: 0.06em;">
+        照度两道是「或」：任一成立就开灯。<br>
+        全局照度 620 &#183; 探针 5 分钟一采 &#183; 3 分钟前
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 10px 22px; background: #141a1f; border-top: 1px solid #232c33; display: flex; gap: 20px; font-size: 9.5px; letter-spacing: 0.16em; color: #4a5860;">
+    <span>区 4/5</span><span>VARS 25</span><span>RULES 38</span>
+    <span style="flex-grow: 1;"></span><span>刷新 1.2s 前 &#183; 照度 3 分钟前</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
