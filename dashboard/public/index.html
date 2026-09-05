@@ -30,7 +30,40 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body { background: var(--ground); color: var(--ink); font: 12px/1.6 var(--mono); -webkit-font-smoothing: antialiased; }
-.wrap { max-width: 1180px; margin: 0 auto; }
+.wrap { max-width: 1180px; margin: 0 auto; position: relative; z-index: 1; }
+
+/* 背景层。放在最底下、固定不动，模糊和变暗都加在它身上而不是内容上。 */
+#bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#bg .img { position: absolute; inset: -60px; background: center/cover no-repeat; }
+#bg .veil { position: absolute; inset: 0; background: #000; }
+
+/* ---------- 编辑模式 ---------- */
+body.editing { user-select: none; }
+body.editing .room, body.editing .tile { cursor: move; }
+body.editing .room::after, body.editing .tile::after {
+  content: ""; position: absolute; right: 0; bottom: 0; width: 14px; height: 14px;
+  cursor: nwse-resize; background:
+    linear-gradient(135deg, transparent 50%, var(--bright) 50%, var(--bright) 68%, transparent 68%);
+  opacity: .75;
+}
+body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright); }
+.dragging { opacity: .85; box-shadow: 0 6px 24px #0008; z-index: 5; }
+
+.editbar {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px;
+  padding: 11px 22px; background: #16202a; border-bottom: 1px solid var(--bright);
+  font-size: 11px; letter-spacing: .14em; color: var(--ink);
+}
+.editbar .grow { flex-grow: 1; }
+.editbar input[type=range] { width: 96px; accent-color: var(--bright); vertical-align: middle; }
+.editbar input[type=color] { width: 30px; height: 24px; padding: 0; border: 1px solid var(--line); background: none; }
+.editbar label { display: flex; align-items: center; gap: 7px; color: var(--dim); font-size: 10.5px; }
+.editbar .btn-s {
+  background: none; border: 1px solid var(--line); color: var(--ink); padding: 6px 13px;
+  cursor: pointer; font: inherit; font-size: 10.5px; letter-spacing: .14em;
+}
+.editbar .btn-s:hover { border-color: var(--bright); }
+.editbar .btn-s.go { background: var(--ok); border-color: var(--ok); color: #0b1710; }
 .zh { font-family: var(--sans); }
 
 /* ---------- 顶栏 / 底栏 ---------- */
@@ -63,8 +96,9 @@ body { background: var(--ground); color: var(--ink); font: 12px/1.6 var(--mono);
 .col.detail { flex: 1 1 340px; max-width: 660px; }
 
 /* ---------- 房间格 ---------- */
-.plan-grid { display: grid; gap: 6px; }
+.plan-grid { position: relative; overflow-x: auto; max-width: 100%; }
 .room {
+  position: absolute;
   background: var(--panel); border: 1px solid var(--line); padding: 12px 13px; cursor: pointer;
   /* 垂直居中而不是顶天立地 —— 跨行的房间块（主卧那种）中间会空一大片。 */
   display: flex; flex-direction: column; justify-content: center; gap: 9px; min-height: 76px;
@@ -125,6 +159,8 @@ body { background: var(--ground); color: var(--ink); font: 12px/1.6 var(--mono);
 
 /* ---------- 模式开关 ---------- */
 .tiles { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); }
+.tiles.placed { display: block; position: relative; overflow-x: auto; max-width: 100%; }
+.tiles.placed .tile { position: absolute; }
 .tile {
   background: var(--panel); border: 1px solid var(--line); padding: 11px 12px;
   display: flex; align-items: center; gap: 9px; font: inherit; color: inherit; text-align: left;
@@ -195,6 +231,27 @@ async function api(path, body) {
 }
 
 let timer = null, lastFetch = null, picked = null, state = null, spareOpen = false;
+let editing = false, draft = null;   // draft = 编辑中的外观，保存前不落盘
+
+const bgLayer = document.createElement('div');
+bgLayer.id = 'bg';
+document.body.prepend(bgLayer);
+
+// 背景。图片和纯色两种；图片的模糊/变暗加在背景层上，不碰内容。
+function paintBackground(bg) {
+  if (!bg || bg.kind === undefined) { bgLayer.innerHTML = ''; document.body.style.background = ''; return; }
+  if (bg.kind === 'color') {
+    bgLayer.innerHTML = '';
+    document.body.style.background = bg.color;
+    return;
+  }
+  document.body.style.background = '';
+  bgLayer.innerHTML =
+    `<div class="img" style="background-image:url('/bg?t=${encodeURIComponent(TOKEN)}&v=${bgVersion}');`
+    + `filter:blur(${bg.blur || 0}px)"></div>`
+    + `<div class="veil" style="opacity:${bg.dim ?? 0}"></div>`;
+}
+let bgVersion = 0;
 
 const LED = { clear: 'ok', bright: 'bright', blocked: 'alert', unconfigured: 'dead', unknown: 'alert' };
 
@@ -217,13 +274,15 @@ function render(s) {
       <span class="led ${hl && hl.state === 'blocked' ? 'alert' : 'ok'}"></span>
       <span class="zh" style="letter-spacing:.14em;color:#8fa0aa">模式看板</span>
       <span class="grow"></span>
+      <button class="mini" id="editbtn">${editing ? '退出编辑' : '编辑'}</button>
       <span id="clock"></span>
     </div>
+    ${editing ? renderEditBar() : ''}
     ${hl ? renderBand(hl) : ''}
     <div class="body">
       ${fp ? `<div class="col plan">
         <div class="cap">${esc(fp.title ?? '房间')}</div>
-        <div class="plan-grid" style="grid-template-columns:${fp.columns.join(' ')};grid-template-rows:${fp.rows.join(' ')}">
+        <div class="plan-grid" style="width:${planSize(rooms).w}px;height:${planSize(rooms).h}px">
           ${rooms.map(renderRoom).join('')}
         </div>
         <div class="legend">
@@ -248,7 +307,24 @@ function render(s) {
       <button class="mini" id="quit">退出</button>
     </div>`;
 
-  wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireQuit(); wireSpare(); tick();
+  paintBackground(editing ? draft?.background : s.layout?.background);
+  wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireQuit(); wireSpare();
+  wireEdit(); wireDrag(); tick();
+}
+
+// 子元素全绝对定位了，容器得自己算出高宽。
+function planSize(items) {
+  let w = 0, h = 0;
+  for (const it of items) {
+    const p = placed(draft?.rooms?.[it.title] ?? draft?.tiles?.[it.ref]) ?? it;
+    w = Math.max(w, (p.x ?? 0) + (p.w ?? 0));
+    h = Math.max(h, (p.y ?? 0) + (p.h ?? 0));
+  }
+  return { w: w + 2, h: h + 2 };
+}
+
+function placed(p) {
+  return p && ['x', 'y', 'w', 'h'].every((k) => typeof p[k] === 'number') ? p : null;
 }
 
 function renderBand(hl) {
@@ -260,11 +336,13 @@ function renderBand(hl) {
 }
 
 function renderRoom(r) {
-  const pos = `grid-column:${r.col}${r.colSpan > 1 ? ` / span ${r.colSpan}` : ''};grid-row:${r.row}${r.rowSpan > 1 ? ` / span ${r.rowSpan}` : ''}`;
+  const p = placed(draft?.rooms?.[r.title]) ?? r;
+  const pos = `left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px`;
   const lx = r.lux ? `<span class="lx">本地 ${esc(r.lux.localValue)} / ${esc(r.lux.localThreshold)} &middot; 全局 ${esc(r.lux.globalValue)} / ${esc(r.lux.zoneThreshold)}</span>` : '';
-  const tag = r.state === 'unconfigured' ? 'div' : 'button';
+  // 编辑模式下一律用 div —— button 会吞掉拖拽用的 pointer 事件。
+  const tag = editing || r.state === 'unconfigured' ? 'div' : 'button';
   return `<${tag} class="room ${r.state}${r.title === picked ? ' sel' : ''}" style="${pos}"
-      ${tag === 'button' ? `type="button" data-room="${esc(r.title)}"` : ''}>
+      data-room="${esc(r.title)}"${tag === 'button' ? ' type="button"' : ''}>
     <span class="nm"><i class="led ${LED[r.state]}"></i><b>${esc(r.title)}</b></span>
     <span style="display:flex;flex-direction:column;gap:3px">
       <span class="st zh">${esc(r.say)}</span>${lx}
@@ -301,29 +379,44 @@ function gateTitle(g) {
 }
 
 function renderGroup(g) {
+  const cards = g.cards.map((c) => ({ ...c, ref: cardRef(c) }));
+  // 摆过位置的就用画布；一张都没摆过就保持自动排版。
+  const anyPlaced = cards.some((c) => placed(draft?.tiles?.[c.ref] ?? c));
+  const size = anyPlaced ? planSize(cards.map((c) => ({ ...(placed(draft?.tiles?.[c.ref] ?? c) ?? {}), ref: c.ref }))) : null;
+
   return `<section>
     <div class="cap">${esc(g.title)}</div>
-    <div class="tiles">${g.cards.map(renderCard).join('')}</div>
+    <div class="tiles${anyPlaced ? ' placed' : ''}"${size ? ` style="height:${size.h}px"` : ''}>${
+      cards.map((c) => renderCard(c, anyPlaced)).join('')}</div>
   </section>`;
 }
 
-function renderCard(c) {
+function cardRef(c) {
+  return c.kind === 'rule' ? `rule.${c.ruleId}` : `${c.scope}.${c.id}`;
+}
+
+function renderCard(c, positioned) {
   const ref = c.kind === 'rule' ? `规则 ${esc(c.ruleId)}` : `${esc(c.scope)}.${esc(c.id)}`;
   const head = `<span class="t">${esc(c.title)}</span>`;
-  if (c.missing) return `<div class="tile bad">${head}<span class="v">网关上没有</span></div>`;
-  if (c.kind === 'rule') return `<div class="tile ${c.enable ? 'on' : ''}" title="${ref}">${head}<span class="v">${c.enable ? '启用中' : '已停用'}</span></div>`;
+  const key = c.ref ?? cardRef(c);
+  const p = positioned ? placed(draft?.tiles?.[key] ?? c) : null;
+  const box = p ? ` style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px"` : '';
+  const tag = ` data-tile="${esc(key)}"${box}`;
+  if (c.missing) return `<div class="tile bad"${tag}>${head}<span class="v">网关上没有</span></div>`;
+  if (c.kind === 'rule') return `<div class="tile ${c.enable ? 'on' : ''}" title="${ref}"${tag}>${head}<span class="v">${c.enable ? '启用中' : '已停用'}</span></div>`;
   if (c.kind === 'toggle') {
     const on = c.value === c.on;
-    return `<button type="button" class="tile act ${on ? 'on' : ''}" role="switch" aria-checked="${on}" title="${ref}"
-      data-scope="${esc(c.scope)}" data-id="${esc(c.id)}" data-want="${esc(on ? c.off : c.on)}">${head}<span class="v">${on ? 'ON' : 'OFF'}</span></button>`;
+    // 编辑模式下用 div —— button 会吞掉拖拽的 pointer 事件。
+    return `<${editing ? 'div' : 'button'} class="tile ${editing ? '' : 'act '}${on ? 'on' : ''}" role="switch" aria-checked="${on}" title="${ref}"
+      data-scope="${esc(c.scope)}" data-id="${esc(c.id)}" data-want="${esc(on ? c.off : c.on)}"${tag}>${head}<span class="v">${on ? 'ON' : 'OFF'}</span></${editing ? 'div' : 'button'}>`;
   }
   const unit = c.unit ? `<span class="u">${esc(c.unit)}</span>` : '';
   if (c.kind === 'number') {
-    return `<button type="button" class="tile act num" title="${ref}"
+    return `<${editing ? 'div' : 'button'} class="tile ${editing ? '' : 'act num'}" title="${ref}"
       data-scope="${esc(c.scope)}" data-id="${esc(c.id)}" data-min="${esc(c.min)}" data-max="${esc(c.max)}"
-      data-value="${esc(c.value)}">${head}<span class="v">${esc(c.value)}${unit}</span></button>`;
+      data-value="${esc(c.value)}"${tag}>${head}<span class="v">${esc(c.value)}${unit}</span></${editing ? 'div' : 'button'}>`;
   }
-  return `<div class="tile" title="${ref}">${head}<span class="v">${esc(c.value)}${unit}</span></div>`;
+  return `<div class="tile" title="${ref}"${tag}>${head}<span class="v">${esc(c.value)}${unit}</span></div>`;
 }
 
 function renderSpare(u) {
@@ -512,6 +605,154 @@ function wireQuit() {
   };
 }
 
+function renderEditBar() {
+  const bg = draft.background ?? {};
+  return `<div class="editbar">
+    <span>编辑中 &middot; 拖动挪位置，拖右下角改大小</span>
+    <label>背景
+      <select id="bgkind">
+        <option value=""${!bg.kind ? ' selected' : ''}>无</option>
+        <option value="image"${bg.kind === 'image' ? ' selected' : ''}>图片</option>
+        <option value="color"${bg.kind === 'color' ? ' selected' : ''}>纯色</option>
+      </select></label>
+    ${bg.kind === 'image' ? `
+      <button class="btn-s" id="bgpick">选图</button>
+      <input type="file" id="bgfile" accept="image/png,image/jpeg,image/webp" hidden>
+      <label>模糊 <input type="range" id="bgblur" min="0" max="40" value="${bg.blur ?? 0}"></label>
+      <label>变暗 <input type="range" id="bgdim" min="0" max="95" value="${Math.round((bg.dim ?? 0) * 100)}"></label>` : ''}
+    ${bg.kind === 'color' ? `<input type="color" id="bgcolor" value="${bg.color ?? '#0d1013'}">` : ''}
+    <span class="grow"></span>
+    <button class="btn-s" id="ecancel">取消</button>
+    <button class="btn-s go" id="esave">保存</button>
+  </div>`;
+}
+
+// 进编辑模式时，把当前排版量出来存进 draft ——
+// 卡片本来是自动排的，没有坐标；量一次之后它们就都是绝对定位了。
+function seedDraft() {
+  draft = structuredClone(state.layout ?? {});
+  draft.rooms ??= {};
+  draft.tiles ??= {};
+
+  for (const r of state.floorplan?.rooms ?? []) {
+    draft.rooms[r.title] ??= { x: r.x, y: r.y, w: r.w, h: r.h };
+  }
+  // 只量分组里的卡片；「未归类」那堆不参与摆放。
+  for (const el of app.querySelectorAll('section .tiles .tile[data-tile]')) {
+    const key = el.dataset.tile;
+    if (draft.tiles[key]) continue;
+    const b = el.getBoundingClientRect(), c = el.closest('.tiles').getBoundingClientRect();
+    draft.tiles[key] = {
+      x: Math.round(b.left - c.left), y: Math.round(b.top - c.top),
+      w: Math.round(b.width), h: Math.round(b.height),
+    };
+  }
+}
+
+function wireEdit() {
+  const btn = document.getElementById('editbtn');
+  if (btn) btn.onclick = () => {
+    if (editing) return exitEdit(false);
+    seedDraft(); editing = true; document.body.classList.add('editing'); render(state);
+  };
+  if (!editing) return;
+
+  const $ = (id) => document.getElementById(id);
+  const redraw = () => render(state);
+
+  $('ecancel').onclick = () => exitEdit(false);
+  $('esave').onclick = () => exitEdit(true);
+
+  $('bgkind').onchange = (e) => {
+    const kind = e.target.value;
+    draft.background = kind === 'color' ? { kind: 'color', color: draft.background?.color ?? '#0d1013' }
+      : kind === 'image' ? { kind: 'image', image: draft.background?.image ?? '', blur: draft.background?.blur ?? 0, dim: draft.background?.dim ?? 0.35 }
+      : undefined;
+    redraw();
+  };
+  if ($('bgcolor')) $('bgcolor').oninput = (e) => { draft.background.color = e.target.value; paintBackground(draft.background); };
+  if ($('bgblur')) $('bgblur').oninput = (e) => { draft.background.blur = Number(e.target.value); paintBackground(draft.background); };
+  if ($('bgdim')) $('bgdim').oninput = (e) => { draft.background.dim = Number(e.target.value) / 100; paintBackground(draft.background); };
+  if ($('bgpick')) {
+    $('bgpick').onclick = () => $('bgfile').click();
+    $('bgfile').onchange = async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      const dataUrl = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f); });
+      const r = await api('/api/background', { dataUrl }).catch((err) => ({ ok: false, error: err.message }));
+      if (!r.ok) return alert(r.error ?? '上传失败');
+      // 图片存在服务端了，刷一下缓存里的版本号让 /bg 重新取
+      bgVersion++;
+      draft.background = { ...draft.background, ...r.layout.background };
+      redraw();
+    };
+  }
+}
+
+async function exitEdit(save) {
+  if (save) {
+    const r = await api('/api/layout', draft).catch((e) => ({ ok: false, error: e.message }));
+    if (!r.ok) return alert(r.error ?? '保存失败');
+  }
+  editing = false; draft = null;
+  document.body.classList.remove('editing');
+  poll();
+}
+
+// 拖动挪位置，拖右下角改大小。对齐到 4px 网格，摆出来不至于歪歪扭扭。
+function wireDrag() {
+  if (!editing) return;
+  const snap = (v) => Math.round(v / 4) * 4;
+
+  for (const el of app.querySelectorAll('.room[data-room], section .tiles .tile[data-tile]')) {
+    const key = el.dataset.room ?? el.dataset.tile;
+    const bag = el.dataset.room ? draft.rooms : draft.tiles;
+    const p = bag[key];
+    if (!p) continue;
+
+    el.onpointerdown = (e) => {
+      if (e.button !== 0) return;
+      const r = el.getBoundingClientRect();
+      const resizing = e.clientX > r.right - 16 && e.clientY > r.bottom - 16;
+      // 指针起点和方块位置分开记 —— 都叫 x/y 的话展开就互相覆盖了。
+      const from = { px: e.clientX, py: e.clientY, x: p.x, y: p.y, w: p.w, h: p.h };
+
+      el.setPointerCapture(e.pointerId);
+      el.classList.add('dragging');
+      e.preventDefault();
+
+      el.onpointermove = (ev) => {
+        const dx = snap(ev.clientX - from.px), dy = snap(ev.clientY - from.py);
+        if (resizing) {
+          p.w = Math.max(60, from.w + dx);
+          p.h = Math.max(30, from.h + dy);
+        } else {
+          // 夹在容器里 —— 拖出右边会让整页横滚，那是最难受的一种坏掉。
+          const lim = (el.closest('.plan-grid, .tiles')?.clientWidth ?? 4000) - p.w;
+          p.x = Math.min(Math.max(0, lim), Math.max(0, from.x + dx));
+          p.y = Math.max(0, from.y + dy);
+        }
+        Object.assign(el.style, { left: p.x + 'px', top: p.y + 'px', width: p.w + 'px', height: p.h + 'px' });
+      };
+      el.onpointerup = () => {
+        el.classList.remove('dragging');
+        el.onpointermove = null; el.onpointerup = null;
+        grow(el);
+      };
+    };
+  }
+}
+
+// 拖出容器就把容器撑大。
+function grow(el) {
+  const box = el.closest('.plan-grid, .tiles');
+  if (!box) return;
+  let w = 0, h = 0;
+  for (const c of box.children) { w = Math.max(w, c.offsetLeft + c.offsetWidth); h = Math.max(h, c.offsetTop + c.offsetHeight); }
+  box.style.height = h + 2 + 'px';
+  if (box.classList.contains('plan-grid')) box.style.width = w + 2 + 'px';
+}
+
 function tick() {
   const ago = document.getElementById('ago'), clock = document.getElementById('clock');
   if (clock) clock.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -524,6 +765,8 @@ setInterval(tick, 1000);
 
 async function poll() {
   clearTimeout(timer);
+  // 编辑期间不拉数据 —— 每 10 秒重画一次会把拖到一半的东西冲掉。
+  if (editing) { timer = setTimeout(poll, 10000); return; }
   try { render(await api('/api/state')); } catch (e) { renderTrouble(e.message); }
   timer = setTimeout(poll, 10000);
 }

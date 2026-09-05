@@ -16,6 +16,7 @@ import { makeCache } from './lib/cache.mjs';
 import { buildView, assertWritable } from './lib/state.mjs';
 import { loadConfig, buildSkeleton, buildFloorplanSkeleton, applyLiveThresholds } from './lib/config.mjs';
 import { buildThresholdPatch, unexpectedChanges } from './lib/threshold.mjs';
+import { applyLayout, sanitizeLayout } from './lib/layout.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
@@ -46,6 +47,13 @@ const TOKEN = loadToken();
 // 打包时写死一个意味着地址一变，住户就只能等我重新打包。
 //
 // 三层：住户上次**登录成功**用的 → .app 里打包时写死的默认 → 空（让他自己填）。
+const LAYOUT_FILE = join(STATE_DIR, 'layout.json');
+
+// 外观（位置、背景）跟语义配置分开存 —— 见 lib/layout.mjs。
+function loadLayout() {
+  try { return sanitizeLayout(JSON.parse(readFileSync(LAYOUT_FILE, 'utf8'))); } catch { return {}; }
+}
+
 const ADDRESS_FILE = join(STATE_DIR, 'address.json');
 
 // 地址被环境变量钉住 = `mgs serve` 那条路径：地址是 common.sh 解析好传进来的，
@@ -188,8 +196,11 @@ const routes = {
       return { ok: false, loggedIn: null, error: e.message, ...askAddress() };
     }
 
-    const view = buildView(applyLiveThresholds(config(), await liveThresholds()), snapshot);
-    return { ok: true, loggedIn: true, ...view, gatewayErrors: snapshot.errors };
+    const view = buildView(
+      applyLayout(applyLiveThresholds(config(), await liveThresholds()), loadLayout()),
+      snapshot,
+    );
+    return { ok: true, loggedIn: true, ...view, layout: loadLayout(), gatewayErrors: snapshot.errors };
   },
 
   async 'POST /api/login'(req) {
@@ -254,6 +265,36 @@ const routes = {
     // 不做乐观更新：立刻重读，页面显示网关的真实值。
     cache.invalidate();
     return { ok: true };
+  },
+
+  async 'GET /api/layout'() {
+    return { ok: true, layout: loadLayout() };
+  },
+
+  // 页面写的，所以清洗一遍再落盘 —— 位置会进 style，背景色也是。
+  async 'POST /api/layout'(req) {
+    const clean = sanitizeLayout(await readBody(req));
+    writeFileSync(LAYOUT_FILE, JSON.stringify(clean, null, 2));
+    return { ok: true, layout: clean };
+  },
+
+  // 背景图。存进 Application Support，页面用 /bg?t=… 取。
+  async 'POST /api/background'(req) {
+    const { dataUrl } = await readBody(req);
+    const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ''));
+    if (!m) return { ok: false, error: '只收 png / jpeg / webp' };
+
+    const buf = Buffer.from(m[2], 'base64');
+    if (buf.length > 6 * 1024 * 1024) return { ok: false, error: `图太大了（${(buf.length / 1048576).toFixed(1)}MB），压到 6MB 以内` };
+
+    const name = `background.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
+    writeFileSync(join(STATE_DIR, name), buf);
+
+    const layout = loadLayout();
+    layout.background = { ...(layout.background ?? {}), kind: 'image', image: name };
+    const clean = sanitizeLayout(layout);
+    writeFileSync(LAYOUT_FILE, JSON.stringify(clean, null, 2));
+    return { ok: true, layout: clean };
   },
 
   // 看板唯一会写规则图的地方。
@@ -330,10 +371,22 @@ const server = createServer(async (req, res) => {
     return send(res, 200, readFileSync(join(HERE, 'public', 'index.html'), 'utf8'), 'text/html; charset=utf-8');
   }
 
-  if (!url.pathname.startsWith('/api/')) return send(res, 404, { ok: false, error: 'not found' });
+  const guarded = url.pathname.startsWith('/api/') || url.pathname === '/bg';
+  if (!guarded) return send(res, 404, { ok: false, error: 'not found' });
 
+  // CSS 的 url() 带不了自定义头，所以 /bg 的 token 走查询串。
   const given = req.headers['x-dash-token'] || url.searchParams.get('t');
   if (given !== TOKEN) return send(res, 403, { ok: false, error: 'token 不对 —— 从应用图标重新打开一次' });
+
+  if (url.pathname === '/bg') {
+    const bg = loadLayout().background;
+    if (bg?.kind !== 'image') return send(res, 404, { ok: false, error: 'no background' });
+    const p = join(STATE_DIR, bg.image);
+    if (!existsSync(p)) return send(res, 404, { ok: false, error: 'no background' });
+    const type = bg.image.endsWith('.png') ? 'image/png' : bg.image.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+    res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache' });
+    return res.end(readFileSync(p));
+  }
 
   const handler = routes[`${req.method} ${url.pathname}`];
   if (!handler) return send(res, 404, { ok: false, error: 'not found' });
