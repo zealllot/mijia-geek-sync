@@ -43,6 +43,14 @@ function validate(cfg, path) {
       if (c.kind === 'toggle' && (c.on === undefined || c.off === undefined)) {
         throw new Error(`${where}：toggle 卡片缺 on / off —— 不写清楚哪个值算开，页面不敢帮你翻`);
       }
+      if (c.kind === 'number') {
+        // 没有上下界等于「能写任意数」。在别人家里，那可能把灯写成
+        // 一个谁都没见过的状态，而且没有回头路。
+        if (typeof c.min !== 'number' || typeof c.max !== 'number') {
+          throw new Error(`${where}：number 卡片缺 min / max —— 不给上下界就等于能写任意数`);
+        }
+        if (c.min > c.max) throw new Error(`${where}：min ${c.min} 比 max ${c.max} 还大，写反了`);
+      }
     }
   }
 }

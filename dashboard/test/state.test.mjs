@@ -36,7 +36,7 @@ test('没有配置时降级成扁平模式，列出全部变量和规则', () =>
 test('扁平模式下没有任何变量可写', () => {
   const view = buildView(null, snapshot);
 
-  assert.deepEqual(view.writable, []);
+  assert.deepEqual(view.writable, {});
   assert.equal(
     view.groups[0].cards.every((c) => c.kind === 'readonly'),
     true,
@@ -70,10 +70,12 @@ test('有配置时按配置分组，并给每张卡片填上网关的实时值',
   ]);
 });
 
-test('只有 toggle 卡片进入可写白名单', () => {
+test('可写白名单记的是「允许写什么」，不只是「谁能写」', () => {
   const view = buildView(config, snapshot);
 
-  assert.deepEqual(view.writable, ['global.xggCinema']);
+  assert.deepEqual(view.writable, {
+    'global.xggCinema': { kind: 'toggle', on: 1, off: 0 },
+  });
 });
 
 test('配置没引用到的变量和规则落进未归类区，不会凭空消失', () => {
@@ -143,19 +145,38 @@ test('引用存在时不标 missing', () => {
 
 import { assertWritable } from '../lib/state.mjs';
 
-test('白名单里的变量放行', () => {
-  assert.doesNotThrow(() => assertWritable(['global.xggCinema'], 'global', 'xggCinema'));
+const WL = {
+  'global.xggCinema': { kind: 'toggle', on: 1, off: 0 },
+  'global.xggBrightness': { kind: 'number', min: 1, max: 100 },
+};
+
+test('白名单里的开关，写它声明过的值放行', () => {
+  assert.doesNotThrow(() => assertWritable(WL, 'global', 'xggCinema', 1));
+  assert.doesNotThrow(() => assertWritable(WL, 'global', 'xggCinema', 0));
 });
 
 test('不在白名单里的变量拒绝写入', () => {
-  assert.throws(
-    () => assertWritable(['global.xggCinema'], 'global', 'xggLivingLux'),
-    /不在可写白名单/,
-  );
+  assert.throws(() => assertWritable(WL, 'global', 'xggLivingLux', 1), /不在可写白名单/);
 });
 
 test('扁平模式（白名单为空）下一律拒绝写入', () => {
-  assert.throws(() => assertWritable([], 'global', 'xggCinema'), /不在可写白名单/);
+  assert.throws(() => assertWritable({}, 'global', 'xggCinema', 1), /不在可写白名单/);
+});
+
+test('开关只收它声明过的那两个值，别的一律拒绝', () => {
+  // 只校验身份不校验值的话，POST {id:'ziDongHua', value:999} 会被原样写进网关。
+  assert.throws(() => assertWritable(WL, 'global', 'xggCinema', 999), /只能是 1 或 0/);
+});
+
+test('数值超出声明的上下界要拒绝', () => {
+  // 在别人家里，一个越界的亮度值可能让灯变成一个谁都没见过的状态。
+  assert.doesNotThrow(() => assertWritable(WL, 'global', 'xggBrightness', 50));
+  assert.throws(() => assertWritable(WL, 'global', 'xggBrightness', 0), /1 到 100/);
+  assert.throws(() => assertWritable(WL, 'global', 'xggBrightness', 101), /1 到 100/);
+});
+
+test('数值必须是数，不能是别的东西', () => {
+  assert.throws(() => assertWritable(WL, 'global', 'xggBrightness', 'abc'), /要填数字/);
 });
 
 test('造成阻塞的那张卡片被标成 culprit，好让页面只高亮它', () => {

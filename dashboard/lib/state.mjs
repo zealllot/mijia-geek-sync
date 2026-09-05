@@ -26,13 +26,15 @@ function mappedView(config, snapshot) {
     };
   });
 
-  // 白名单：只有配置里显式声明成 toggle 的变量能写。
-  // 不是「任意 scope/id 都能写」—— 即使有人直接 POST 任意参数，
-  // 也只能改事先批准过的那几个。
-  const writable = config.groups
-    .flatMap((g) => g.cards)
-    .filter((c) => c.kind === 'toggle')
-    .map((c) => `${c.scope}.${c.id}`);
+  // 白名单记的是「允许写**什么**」，不只是「**谁**能写」。
+  //
+  // 只校验身份的话，POST {id:'ziDongHua', value:999} 会被原样写进网关 ——
+  // 它确实在白名单里。开关只收它声明过的那两个值，数值只收界内的数。
+  const writable = {};
+  for (const c of config.groups.flatMap((g) => g.cards)) {
+    if (c.kind === 'toggle') writable[`${c.scope}.${c.id}`] = { kind: 'toggle', on: c.on, off: c.off };
+    if (c.kind === 'number') writable[`${c.scope}.${c.id}`] = { kind: 'number', min: c.min, max: c.max };
+  }
 
   const floorplan = floorplanOf(config, snapshot);
 
@@ -136,7 +138,7 @@ function flatView(snapshot) {
     })),
   });
 
-  return { groups, floorplan: null, headline: null, unmapped: null, writable: [], fetchedAt: snapshot.fetchedAt };
+  return { groups, floorplan: null, headline: null, unmapped: null, writable: {}, fetchedAt: snapshot.fetchedAt };
 }
 
 // 写入闸门。
@@ -144,11 +146,23 @@ function flatView(snapshot) {
 // 可写集合只来自配置里显式声明成 toggle 的卡片。这是白名单不是黑名单：
 // 即使有人绕过页面直接 POST 任意 scope/id，也只能改事先批准过的那几个。
 // 扁平模式下白名单是空的，所以什么都写不了 —— 那正是想要的默认。
-export function assertWritable(writable, scope, id) {
+export function assertWritable(writable, scope, id, value) {
   const ref = `${scope}.${id}`;
-  if (!writable.includes(ref)) {
-    throw new Error(`${ref} 不在可写白名单里`);
+  const rule = writable[ref];
+  if (!rule) throw new Error(`${ref} 不在可写白名单里`);
+
+  if (rule.kind === 'toggle') {
+    if (value !== rule.on && value !== rule.off) {
+      throw new Error(`${ref} 是开关，只能是 ${rule.on} 或 ${rule.off}`);
+    }
+    return;
   }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${ref} 要填数字`);
+  }
+  if (rule.min !== undefined && value < rule.min) throw new Error(`${ref} 要在 ${rule.min} 到 ${rule.max} 之间`);
+  if (rule.max !== undefined && value > rule.max) throw new Error(`${ref} 要在 ${rule.min} 到 ${rule.max} 之间`);
 }
 
 function refOf(card) {

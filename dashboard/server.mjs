@@ -211,19 +211,21 @@ const routes = {
     const snapshot = await cache.get();
     const view = buildView(config(), snapshot);
 
-    // 白名单：只有配置里显式声明成 toggle 的变量能写。
-    assertWritable(view.writable, scope, id);
+    // 白名单校验的是「允许写**什么**」：开关只收它声明过的两个值，
+    // 数值只收界内的数。只校验身份的话，往开关里 POST 999 也会被写进网关。
+    const num = typeof value === 'number' ? value : Number(value);
+    assertWritable(view.writable, scope, id, Number.isNaN(num) ? value : num);
 
     const before = snapshot.variables[scope]?.[id];
     if (!before) throw new Error(`${scope}.${id} 在网关上不存在`);
 
-    const r = await gw.setVariable({ scope, id, value, type: before.type });
+    const r = await gw.setVariable({ scope, id, value: num, type: before.type });
     if (r.ok === false) return { ok: false, error: r.error?.message ?? '网关拒绝了这次写入' };
 
     // 在别人家里改他正在生效的状态，得留痕。
     appendFileSync(
       join(STATE_DIR, 'writes.log'),
-      `${new Date().toISOString()}\t${scope}.${id}\t${JSON.stringify(before.value)} → ${JSON.stringify(value)}\n`,
+      `${new Date().toISOString()}\t${scope}.${id}\t${JSON.stringify(before.value)} → ${JSON.stringify(num)}\n`,
     );
 
     // 不做乐观更新：立刻重读，页面显示网关的真实值。

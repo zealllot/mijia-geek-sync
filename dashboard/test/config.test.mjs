@@ -148,3 +148,31 @@ test('被跳过的「开灯」规则要报出来，不能悄悄吞掉', () => {
 
   assert.deepEqual(fp.skipped, [{ rule: '20260822210', name: '全屋开灯', why: '没有照度判定，看着像场景规则' }]);
 });
+
+test('number 卡片缺 min/max 时抛错', () => {
+  // 没有上下界就等于「能写任意数」——在别人家里，那可能让灯变成谁都没见过的状态。
+  const p2 = join(dir, 'nobounds.json');
+  writeFileSync(p2, JSON.stringify({ groups: [{ title: '全屋', cards: [
+    { kind: 'number', title: '全局亮度', scope: 'global', id: 'quanJuLiangDu' },
+  ] }] }));
+
+  assert.throws(() => loadConfig(p2), /全局亮度/);
+});
+
+test('number 卡片有 min/max 时通过', () => {
+  const p2 = join(dir, 'bounds.json');
+  writeFileSync(p2, JSON.stringify({ groups: [{ title: '全屋', cards: [
+    { kind: 'number', title: '全局亮度', scope: 'global', id: 'quanJuLiangDu', min: 1, max: 100 },
+  ] }] }));
+
+  assert.doesNotThrow(() => loadConfig(p2));
+});
+
+test('min 比 max 大是配置写反了，要挡住', () => {
+  const p2 = join(dir, 'flipped.json');
+  writeFileSync(p2, JSON.stringify({ groups: [{ title: '全屋', cards: [
+    { kind: 'number', title: '全局色温', scope: 'global', id: 'quanJuSeWen', min: 6500, max: 2700 },
+  ] }] }));
+
+  assert.throws(() => loadConfig(p2), /写反/);
+});

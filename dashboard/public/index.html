@@ -124,6 +124,14 @@ body { background: var(--ground); color: var(--ink); font: 12px/1.6 var(--mono);
 .tile.act:focus-visible { outline: 2px solid var(--bright); outline-offset: 2px; }
 .tile.act[aria-busy="true"] { opacity: .45; cursor: wait; }
 .tile.bad { border-color: var(--alert); } .tile.bad .v { color: var(--alert); }
+.tile .v .u { color: var(--faint); font-size: 10.5px; margin-left: 3px; }
+.tile.editing { border-color: var(--bright); }
+.tile .edit {
+  width: 76px; background: var(--ground); border: 1px solid var(--bright); color: var(--ink-hi);
+  font: 400 13px/1 var(--mono); text-align: right; padding: 6px 8px; outline: none; -moz-appearance: textfield;
+}
+.tile .edit::-webkit-outer-spin-button, .tile .edit::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.tile .bounds { font-size: 9.5px; color: var(--ghost); white-space: nowrap; margin-left: 8px; }
 
 section { margin-top: 26px; }
 details.spare { margin-top: 26px; }
@@ -227,7 +235,7 @@ function render(s) {
       <button class="mini" id="quit">退出</button>
     </div>`;
 
-  wireRooms(); wireToggles(); wireAutostart(); wireQuit(); wireSpare(); tick();
+  wireRooms(); wireToggles(); wireNumbers(); wireAutostart(); wireQuit(); wireSpare(); tick();
 }
 
 function renderBand(hl) {
@@ -287,7 +295,13 @@ function renderCard(c) {
     return `<button type="button" class="tile act ${on ? 'on' : ''}" role="switch" aria-checked="${on}" title="${ref}"
       data-scope="${esc(c.scope)}" data-id="${esc(c.id)}" data-want="${esc(on ? c.off : c.on)}">${head}<span class="v">${on ? 'ON' : 'OFF'}</span></button>`;
   }
-  return `<div class="tile" title="${ref}">${head}<span class="v">${esc(c.value)}</span></div>`;
+  const unit = c.unit ? `<span class="u">${esc(c.unit)}</span>` : '';
+  if (c.kind === 'number') {
+    return `<button type="button" class="tile act num" title="${ref}"
+      data-scope="${esc(c.scope)}" data-id="${esc(c.id)}" data-min="${esc(c.min)}" data-max="${esc(c.max)}"
+      data-value="${esc(c.value)}">${head}<span class="v">${esc(c.value)}${unit}</span></button>`;
+  }
+  return `<div class="tile" title="${ref}">${head}<span class="v">${esc(c.value)}${unit}</span></div>`;
 }
 
 function renderSpare(u) {
@@ -370,16 +384,54 @@ function wireRooms() {
   }
 }
 
+async function writeVar(el, value) {
+  if (el.getAttribute('aria-busy') === 'true') return;
+  el.setAttribute('aria-busy', 'true');
+  const r = await api('/api/variable', { scope: el.dataset.scope, id: el.dataset.id, value })
+    .catch((e) => ({ ok: false, error: e.message }));
+  el.removeAttribute('aria-busy');
+  if (!r.ok) alert(r.error ?? '写入失败');
+  poll();   // 不做乐观更新：立刻重读，显示网关的真实值
+}
+
 function wireToggles() {
-  for (const el of app.querySelectorAll('.tile.act')) {
-    el.onclick = async () => {
-      if (el.getAttribute('aria-busy') === 'true') return;
-      el.setAttribute('aria-busy', 'true');
-      const r = await api('/api/variable', { scope: el.dataset.scope, id: el.dataset.id, value: Number(el.dataset.want) })
-        .catch((e) => ({ ok: false, error: e.message }));
-      el.removeAttribute('aria-busy');
-      if (!r.ok) alert(r.error ?? '写入失败');
-      poll();   // 不做乐观更新：立刻重读，显示网关的真实值
+  for (const el of app.querySelectorAll('.tile.act:not(.num)')) {
+    el.onclick = () => writeVar(el, Number(el.dataset.want));
+  }
+}
+
+// 数值卡片：点一下变成输入框，回车才写。
+//
+// 失焦按取消处理，不按提交 —— 这是在别人家里改正在生效的配置，
+// 手滑点开别处不该顺手把一个亮度改掉。
+function wireNumbers() {
+  for (const el of app.querySelectorAll('.tile.act.num')) {
+    el.onclick = () => {
+      if (el.classList.contains('editing')) return;
+      const slot = el.querySelector('.v');
+      const min = Number(el.dataset.min), max = Number(el.dataset.max);
+      const before = el.dataset.value;
+
+      el.classList.add('editing');
+      slot.innerHTML = `<input class="edit" type="number" inputmode="numeric" value="${before}" min="${min}" max="${max}">`
+        + `<span class="bounds">${min}–${max} 回车</span>`;
+      const input = slot.querySelector('.edit');
+      input.focus(); input.select();
+
+      const done = (commit) => {
+        el.classList.remove('editing');
+        const v = Number(input.value);
+        if (!commit || input.value === '' || Number.isNaN(v) || v === Number(before)) return poll();
+        if (v < min || v > max) { alert(`要在 ${min} 到 ${max} 之间`); return poll(); }
+        writeVar(el, v);
+      };
+
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); done(true); }
+        if (e.key === 'Escape') { e.preventDefault(); done(false); }
+      };
+      input.onblur = () => done(false);
+      input.onclick = (e) => e.stopPropagation();
     };
   }
 }
