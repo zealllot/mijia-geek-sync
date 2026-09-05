@@ -46,6 +46,10 @@ const TOKEN = loadToken();
 //
 // 三层：住户上次**登录成功**用的 → .app 里打包时写死的默认 → 空（让他自己填）。
 const ADDRESS_FILE = join(STATE_DIR, 'address.json');
+
+// 地址被环境变量钉住 = `mgs serve` 那条路径：地址是 common.sh 解析好传进来的，
+// 登录页不该再问一遍。.app 那边没有这个变量，地址就归住户填。
+const PINNED = Boolean(process.env.MGS_DASH_BASE_URL);
 let lastTried = null;   // 住户这次填的，即使登录失败也留着，好让他改错字
 let currentBase = null; // 已经解析成 http:// 的那个
 
@@ -66,6 +70,11 @@ function bundledDefault() {
 // 登录页该预填什么。
 function suggestion() {
   return lastTried ?? savedAddress() ?? bundledDefault() ?? '';
+}
+
+// 钉住时不带 address 字段 —— 前端据此决定要不要画地址输入框。
+function askAddress() {
+  return PINNED ? {} : { address: suggestion() };
 }
 
 // mDNS 实例名比 IP 耐用 —— DHCP 换地址它自己会跟着走。
@@ -145,15 +154,15 @@ async function readBody(req) {
 const routes = {
   async 'GET /api/state'() {
     // 还没有地址：这不是故障，是第一次用（或者 .app 没打包默认地址）。
-    if (!currentBase) return { ok: false, loggedIn: false, address: suggestion() };
+    if (!currentBase) return { ok: false, loggedIn: false, ...askAddress() };
 
     let snapshot;
     try {
       snapshot = await cache.get();
     } catch (e) {
       // 会话过期是常态不是异常 —— 页面要把它当首屏，不是报错。
-      if (e.code === 'AUTH_REQUIRED') return { ok: false, loggedIn: false, address: suggestion() };
-      return { ok: false, loggedIn: null, error: e.message, address: suggestion() };
+      if (e.code === 'AUTH_REQUIRED') return { ok: false, loggedIn: false, ...askAddress() };
+      return { ok: false, loggedIn: null, error: e.message, ...askAddress() };
     }
 
     const view = buildView(config(), snapshot);
@@ -163,6 +172,13 @@ const routes = {
   async 'POST /api/login'(req) {
     const { address, code } = await readBody(req);
     if (!/^\d{6}$/.test(String(code ?? ''))) return { ok: false, error: '登录码是 6 位数字' };
+
+    if (PINNED) {
+      const r = await gw.login(String(code));
+      if (r.ok === false) return { ok: false, error: r.error?.message ?? '登录失败，码可能已经用过或过期了' };
+      cache.invalidate();
+      return { ok: true };
+    }
 
     // 住户填的地址留着，登录失败也留 —— 好让他在页面上改错字，
     // 而不是被打回到上一个（已经连不上的）地址。

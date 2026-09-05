@@ -66,7 +66,8 @@ body { background: var(--ground); color: var(--ink); font: 12px/1.6 var(--mono);
 .plan-grid { display: grid; gap: 6px; }
 .room {
   background: var(--panel); border: 1px solid var(--line); padding: 12px 13px; cursor: pointer;
-  display: flex; flex-direction: column; justify-content: space-between; gap: 8px; min-height: 76px;
+  /* 垂直居中而不是顶天立地 —— 跨行的房间块（主卧那种）中间会空一大片。 */
+  display: flex; flex-direction: column; justify-content: center; gap: 9px; min-height: 76px;
   transition: border-color .2s ease, background .2s ease;
   font: inherit; color: inherit; text-align: left;
 }
@@ -144,6 +145,7 @@ details.spare[open] > summary::before { content: "- "; }
 .addr:focus { border-color: var(--bright); }
 .code { width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink-hi); font: 400 28px/1 var(--mono); letter-spacing: .42em; text-align: center; padding: 19px 0 19px .42em; outline: none; }
 .code:focus { border-color: var(--bright); }
+.code::placeholder { color: #2b353c; }
 .btn { margin-top: 12px; width: 100%; padding: 14px; cursor: pointer; background: var(--ok); color: #0b1710; border: none; font: 400 14px/1 var(--sans); letter-spacing: .1em; }
 .btn:disabled { opacity: .4; cursor: wait; }
 .err { color: var(--alert); font-size: 12.5px; margin-top: 15px; min-height: 1.2em; font-family: var(--sans); }
@@ -171,7 +173,7 @@ async function api(path, body) {
   return r.json();
 }
 
-let timer = null, lastFetch = null, picked = null, state = null;
+let timer = null, lastFetch = null, picked = null, state = null, spareOpen = false;
 
 const LED = { clear: 'ok', bright: 'bright', blocked: 'alert', unconfigured: 'dead', unknown: 'alert' };
 
@@ -225,7 +227,7 @@ function render(s) {
       <button class="mini" id="quit">退出</button>
     </div>`;
 
-  wireRooms(); wireToggles(); wireAutostart(); wireQuit(); tick();
+  wireRooms(); wireToggles(); wireAutostart(); wireQuit(); wireSpare(); tick();
 }
 
 function renderBand(hl) {
@@ -294,54 +296,57 @@ function renderSpare(u) {
     ...u.rules.map((r) => ({ kind: 'rule', title: r.title, ruleId: r.ruleId, enable: r.enable })),
     ...u.variables.map((v) => ({ kind: 'readonly', title: v.title, scope: v.scope, id: v.id, value: v.value })),
   ];
-  return `<details class="spare"><summary>未归类 ${tiles.length} 项</summary>
+  // 展开状态要跨渲染保留 —— 每 10 秒轮询一次，重画时把它合上会很烦人。
+  return `<details class="spare"${spareOpen ? ' open' : ''}><summary>未归类 ${tiles.length} 项</summary>
     <div class="note zh" style="margin:4px 0 12px">这些没写进配置，所以没有分组也没有结论 —— 但不会被藏起来。</div>
     <div class="tiles">${tiles.map(renderCard).join('')}</div></details>`;
 }
 
 function renderGate(address, msg) {
+  const ask = address !== undefined;   // undefined = 地址被钉住（mgs serve），不用问
   const addr = address ?? '';
   app.innerHTML = `<div class="gate-screen">
-    <h1>${addr ? '要一个新的登录码' : '连上中枢'}</h1>
-    <p>${addr ? '中枢的登录码短时有效，隔一阵就要重取一次。' : '第一次用，先告诉它中枢在哪。'}</p>
+    <h1>${!ask || addr ? '要一个新的登录码' : '连上中枢'}</h1>
+    <p>${!ask || addr ? '中枢的登录码短时有效，隔一阵就要重取一次。' : '第一次用，先告诉它中枢在哪。'}</p>
     <ol>
       <li>打开<b>米家 App</b></li><li>进<b>中枢网关</b>那台设备</li>
       <li>点<b>中枢功能 &rarr; 自动化极客版</b></li><li>抄下页面上那个<b>6 位数字</b></li>
     </ol>
-    <div class="field">
+    ${!ask ? '' : `<div class="field">
       <label>中枢地址</label>
       <input class="addr" id="addr" value="${esc(addr)}" placeholder="192.168.1.100" spellcheck="false" autocapitalize="off">
       <div class="hint">连不上就改这里 &mdash; 路由器重启后地址可能变了。
         填米家 App 里显示的那个 IP；或者填中枢的 mDNS 实例名，那个换 IP 也不用改。</div>
-    </div>
+    </div>`}
     <div class="field">
       <label>6 位登录码</label>
-      <input class="code" id="code" inputmode="numeric" maxlength="6">
+      <input class="code" id="code" inputmode="numeric" maxlength="6" placeholder="······">
     </div>
     <button class="btn" id="go">登录</button>
     <div class="err" id="err">${esc(msg ?? '')}</div></div>`;
 
   const addrEl = document.getElementById('addr'), code = document.getElementById('code'),
         go = document.getElementById('go'), err = document.getElementById('err');
+  const body = () => (addrEl ? { address: addrEl.value, code: code.value } : { code: code.value });
 
   const submit = async () => {
     if (!/^\d{6}$/.test(code.value)) { err.textContent = '登录码要 6 位数字'; code.focus(); return; }
     go.disabled = true; err.textContent = '';
-    const r = await api('/api/login', { address: addrEl.value, code: code.value })
+    const r = await api('/api/login', body())
       .catch((e) => ({ ok: false, error: e.message }));
     go.disabled = false;
     if (r.ok) return poll();
     // 码是一次性的，清掉；地址留着 —— 他可能正是要在这儿改错字。
     code.value = '';
-    if (r.address !== undefined) addrEl.value = r.address;
+    if (addrEl && r.address !== undefined) addrEl.value = r.address;
     err.textContent = r.error ?? '登录失败';
     code.focus();
   };
 
   go.onclick = submit;
-  for (const el of [addrEl, code]) el.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  for (const el of [addrEl, code]) if (el) el.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
   // 地址已经有了就直接落在登录码上 —— 多数时候地址不用动。
-  (addr ? code : addrEl).focus();
+  (addr || !addrEl ? code : addrEl).focus();
 }
 
 function renderTrouble(message, address) {
@@ -352,6 +357,11 @@ function renderTrouble(message, address) {
   const b = document.getElementById('fix');
   // 路由器重启后地址会变，这是最常见的「连不上」—— 得给一条自己改的出口。
   if (b) b.onclick = () => { clearTimeout(timer); renderGate(address ?? '', message); };
+}
+
+function wireSpare() {
+  const d = app.querySelector('details.spare');
+  if (d) d.ontoggle = () => { spareOpen = d.open; };
 }
 
 function wireRooms() {
