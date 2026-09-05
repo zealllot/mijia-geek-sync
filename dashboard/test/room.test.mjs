@@ -122,3 +122,30 @@ test('照度步骤带 lux 标记，好让页面换一套说法', () => {
   assert.deepEqual(r.chain.slice(-2).map((c) => c.kind), ['lux', 'lux']);
   assert.equal(r.chain[0].kind, 'gate');
 });
+
+const editable = {
+  ...livingRoom,
+  rule: '20260822160',
+  lux: { ...livingRoom.lux, zoneThresholdNode: 'A3b', zoneThresholdRange: [1, 3000] },
+};
+
+test('声明了可改范围时，全局照度那一道带上改它要用的东西', () => {
+  const r = evaluateRoom(editable, vars());
+
+  assert.deepEqual(r.chain.at(-1).edit, {
+    rule: '20260822160', node: 'A3b', value: 1000, min: 1, max: 3000,
+  });
+});
+
+test('没声明可改范围就不可改 —— 每个房间要显式开启，不是默认能改', () => {
+  const r = evaluateRoom(livingRoom, vars());
+
+  assert.equal(r.chain.at(-1).edit, undefined);
+});
+
+test('本地照度那一道永远不可改 —— 那是全屋共用的一个数', () => {
+  // 本地阈值 100 是全屋共用的舒适下限，不是按区标定的，不该让住户逐个房间去调。
+  const r = evaluateRoom(editable, vars());
+
+  assert.equal(r.chain.at(-2).edit, undefined);
+});

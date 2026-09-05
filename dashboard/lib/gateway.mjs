@@ -143,6 +143,28 @@ export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs 
       return out;
     },
 
+    // 单条规则的图。看板只在两处用：读阈值、以及改阈值前后的回读比对。
+    async graph(ruleId) {
+      return unwrap(await callXgg(['rule', 'view', ruleId], { run }), `rule view ${ruleId}`);
+    },
+
+    async graphsFor(ids) {
+      const out = {};
+      for (const id of ids) {
+        out[id] = unwrap(await callXgg(['rule', 'view', id], { run }), `rule view ${id}`);
+      }
+      return out;
+    },
+
+    // 看板唯一会写规则的地方。补丁由 threshold.mjs 做到最小，
+    // 写完由调用方回读比对 —— 保留 xgg 的写前快照。
+    async updateNode(ruleId, nodeId, patch) {
+      return callXgg(
+        ['rule', 'node', 'update', '--rule-id', ruleId, '--node-id', nodeId, '--patch', JSON.stringify(patch)],
+        { run, attempts: 1 },
+      );
+    },
+
     async status() {
       return callXgg(['status'], { run });
     },

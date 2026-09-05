@@ -110,6 +110,19 @@ body { background: var(--ground); color: var(--ink); font: 12px/1.6 var(--mono);
 .gate.missing { border-color: var(--alert); } .gate.missing .g-note { color: var(--alert); }
 .note { margin-top: 14px; font-size: 9.5px; line-height: 1.8; color: #3f4c55; letter-spacing: .06em; }
 
+/* 可改的阈值：唯一会写规则图的东西，所以给它一个「这不是普通显示」的样子。 */
+.thr {
+  background: none; border: 1px dashed #33414b; color: inherit; font: inherit;
+  padding: 1px 6px; margin: 0 1px; cursor: pointer; border-radius: 2px;
+}
+.thr:hover { border-color: var(--bright); border-style: solid; color: var(--ink-hi); }
+.thr:focus-visible { outline: 2px solid var(--bright); outline-offset: 2px; }
+.thr-edit {
+  width: 66px; background: var(--ground); border: 1px solid var(--bright); color: var(--ink-hi);
+  font: inherit; text-align: right; padding: 2px 5px; outline: none; -moz-appearance: textfield;
+}
+.thr-edit::-webkit-outer-spin-button, .thr-edit::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
 /* ---------- 模式开关 ---------- */
 .tiles { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); }
 .tile {
@@ -235,7 +248,7 @@ function render(s) {
       <button class="mini" id="quit">退出</button>
     </div>`;
 
-  wireRooms(); wireToggles(); wireNumbers(); wireAutostart(); wireQuit(); wireSpare(); tick();
+  wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireQuit(); wireSpare(); tick();
 }
 
 function renderBand(hl) {
@@ -268,7 +281,7 @@ function renderChain(r) {
   return `<div class="cap">${esc(r.title)} &middot; 开灯要过的 ${r.chain.length} 道${r.rule ? ` &middot; 规则 ${esc(r.rule)}` : ''}</div>
     ${r.chain.map((g) => `<div class="gate ${g.status}">
       <i class="led sm ${g.status === 'pass' ? 'ok' : (g.status === 'skip' || g.status === 'fail') ? 'dead' : 'alert'}"></i>
-      <span class="g-name zh">${esc(g.title)}</span>
+      <span class="g-name zh">${gateTitle(g)}</span>
       <span class="g-ref">${esc(g.ref)}${g.value !== undefined ? ' = ' + esc(g.value) : ''}</span>
       <span class="g-note zh">${NOTE[g.kind ?? 'gate'][g.status] ?? ''}</span>
     </div>`).join('')}
@@ -276,6 +289,15 @@ function renderChain(r) {
       照度两道是「或」：任一成立就开灯。<br>
       ${r.luxKnown === false ? '照度读不到 —— 这两道判不了。' : '照度由探针写入，不是实时值。'}
     </div>`;
+}
+
+// 阈值那个数字做成可点的 —— 就在它判失败的那一行上改，不用跑去别处找。
+function gateTitle(g) {
+  if (!g.edit) return esc(g.title);
+  const head = esc(g.title.replace(/[\d.]+$/, ''));
+  return `${head}<button type="button" class="thr" data-rule="${esc(g.edit.rule)}" data-node="${esc(g.edit.node)}"
+    data-value="${esc(g.edit.value)}" data-min="${esc(g.edit.min)}" data-max="${esc(g.edit.max)}"
+    title="点一下改这个阈值">${esc(g.edit.value)}</button>`;
 }
 
 function renderGroup(g) {
@@ -432,6 +454,36 @@ function wireNumbers() {
       };
       input.onblur = () => done(false);
       input.onclick = (e) => e.stopPropagation();
+    };
+  }
+}
+
+// 改阈值 = 写规则图，看板唯一一处。所以比改变量更谨慎：
+// 回车才写，失焦取消，写完服务端会回读整张图比对，不止改了这一处就报出来。
+function wireThresholds() {
+  for (const btn of app.querySelectorAll('button.thr')) {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const { rule, node, value, min, max } = btn.dataset;
+      const input = document.createElement('input');
+      Object.assign(input, { className: 'thr-edit', type: 'number', value, min, max });
+      btn.replaceWith(input);
+      input.focus(); input.select();
+
+      const done = async (commit) => {
+        input.onblur = null;
+        const v = Number(input.value);
+        if (!commit || input.value === '' || Number.isNaN(v) || v === Number(value)) return poll();
+        if (v < Number(min) || v > Number(max)) { alert(`要在 ${min} 到 ${max} 之间`); return poll(); }
+        const r = await api('/api/threshold', { rule, node, value: v }).catch((err) => ({ ok: false, error: err.message }));
+        if (!r.ok) alert(r.error ?? '写入失败');
+        poll();
+      };
+      input.onkeydown = (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); done(true); }
+        if (ev.key === 'Escape') { ev.preventDefault(); done(false); }
+      };
+      input.onblur = () => done(false);
     };
   }
 }

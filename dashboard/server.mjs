@@ -14,7 +14,8 @@ import { homedir } from 'node:os';
 import { makeGateway } from './lib/gateway.mjs';
 import { makeCache } from './lib/cache.mjs';
 import { buildView, assertWritable } from './lib/state.mjs';
-import { loadConfig, buildSkeleton, buildFloorplanSkeleton } from './lib/config.mjs';
+import { loadConfig, buildSkeleton, buildFloorplanSkeleton, applyLiveThresholds } from './lib/config.mjs';
+import { buildThresholdPatch, unexpectedChanges } from './lib/threshold.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
@@ -117,6 +118,28 @@ function config() {
 
 const cache = makeCache({ ttlMs: 10_000, load: () => gw.snapshot() });
 
+// 规则图单独缓存：阈值写在图里，但它是配置、几乎不变，所以 5 分钟拉一次就够。
+// 只拉 floorplan 里用到的那几条，不是全部三十几条。
+const graphCache = makeCache({
+  ttlMs: 5 * 60_000,
+  load: () => gw.graphsFor([...new Set((config()?.floorplan?.rooms ?? []).map((r) => r.rule).filter(Boolean))]),
+});
+
+// 图里所有节点的 v1，键是 `<规则>.<节点>`。读不到就返回 null（没登录时会这样），
+// 那时用配置里的兜底值。
+async function liveThresholds() {
+  const rooms = config()?.floorplan?.rooms ?? [];
+  if (!rooms.some((r) => r.lux?.zoneThresholdNode)) return null;
+  try {
+    const graphs = await graphCache.get();
+    const out = {};
+    for (const [ruleId, g] of Object.entries(graphs)) {
+      for (const n of g.nodes ?? []) if (n.props?.v1 !== undefined) out[`${ruleId}.${n.id}`] = n.props.v1;
+    }
+    return out;
+  } catch { return null; }
+}
+
 // ---------- --init-config ----------
 if (process.argv.includes('--init-config')) {
   if (!currentBase) {
@@ -165,7 +188,7 @@ const routes = {
       return { ok: false, loggedIn: null, error: e.message, ...askAddress() };
     }
 
-    const view = buildView(config(), snapshot);
+    const view = buildView(applyLiveThresholds(config(), await liveThresholds()), snapshot);
     return { ok: true, loggedIn: true, ...view, gatewayErrors: snapshot.errors };
   },
 
@@ -230,6 +253,56 @@ const routes = {
 
     // 不做乐观更新：立刻重读，页面显示网关的真实值。
     cache.invalidate();
+    return { ok: true };
+  },
+
+  // 看板唯一会写规则图的地方。
+  //
+  // 区阈值不是变量（deviceGet 的比较值只收字面量），所以改它只能改图。
+  // 两头上锁：补丁做到最小（threshold.mjs），写完回读整张图逐字段比对。
+  async 'POST /api/threshold'(req) {
+    const { rule, node, value } = await readBody(req);
+    const rooms = config()?.floorplan?.rooms ?? [];
+
+    // 白名单：只能改 floorplan 里声明过的那一个 (规则, 节点)。
+    const room = rooms.find((r) => r.rule === rule && r.lux?.zoneThresholdNode === node);
+    if (!room) return { ok: false, error: `${rule}.${node} 不在可改的阈值清单里` };
+
+    // 没声明上下界就不给改 —— 每个房间必须显式开启，不是默认能改。
+    const range = room.lux.zoneThresholdRange;
+    if (!Array.isArray(range) || typeof range[0] !== 'number' || typeof range[1] !== 'number') {
+      return { ok: false, error: `${room.title} 的阈值没有声明可改范围，不给改` };
+    }
+    const v = Number(value);
+    if (!Number.isFinite(v)) return { ok: false, error: '要填数字' };
+    if (v < range[0] || v > range[1]) return { ok: false, error: `要在 ${range[0]} 到 ${range[1]} 之间` };
+
+    const before = await gw.graph(rule);
+    const target = (before.nodes ?? []).find((n) => n.id === node);
+    if (!target) return { ok: false, error: `规则 ${rule} 上没有节点 ${node}` };
+    const was = target.props?.v1;
+    if (was === v) return { ok: true };
+
+    const r = await gw.updateNode(rule, node, buildThresholdPatch(target, v));
+    if (r.ok === false) return { ok: false, error: r.error?.message ?? '网关拒绝了这次写入' };
+
+    // 回读比对。「只改了阈值这一个」不能靠嘴保证 —— 这是在别人家里改正在跑的自动化。
+    const after = await gw.graph(rule);
+    const bad = unexpectedChanges(before, after, node, v);
+
+    appendFileSync(
+      join(STATE_DIR, 'writes.log'),
+      `${new Date().toISOString()}\t规则 ${rule} 节点 ${node} 阈值\t${was} → ${v}` +
+        `${bad.length ? `\t!! 意外改动：${bad.join('；')}` : ''}\n`,
+    );
+
+    graphCache.invalidate();
+    cache.invalidate();
+
+    if (bad.length) {
+      return { ok: false, error: `阈值写进去了，但改动不止这一处：${bad.join('；')}。` +
+        `快照在 ${join(STATE_DIR, 'snapshots')}，用 mgs pull 对一下。` };
+    }
     return { ok: true };
   },
 

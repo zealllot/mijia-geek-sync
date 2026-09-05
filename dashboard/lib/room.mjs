@@ -89,14 +89,24 @@ function luxSteps(room, lux, skipped) {
   const localTitle = `本地照度 < ${l.localThreshold}`;
   const globalTitle = `全局照度 < ${l.zoneThreshold}`;
 
-  if (skipped) return [step(localTitle, l.local, 'skip'), step(globalTitle, l.global, 'skip')];
-  if (!lux) return [step(localTitle, l.local, 'missing'), step(globalTitle, l.global, 'missing')];
+  // 区阈值可改的前提：配置里显式声明了节点和范围。每个房间要单独开启 ——
+  // 这是看板唯一会写规则图的操作，不该是默认能干的事。
+  //
+  // 本地阈值不给改：那 100 是全屋共用的舒适下限，不是按区标定出来的。
+  const edit = l.zoneThresholdNode && Array.isArray(l.zoneThresholdRange)
+    ? { rule: room.rule, node: l.zoneThresholdNode, value: l.zoneThreshold,
+        min: l.zoneThresholdRange[0], max: l.zoneThresholdRange[1] }
+    : null;
+  const withEdit = (o) => (edit ? { ...o, edit } : o);
+
+  if (skipped) return [step(localTitle, l.local, 'skip'), withEdit(step(globalTitle, l.global, 'skip'))];
+  if (!lux) return [step(localTitle, l.local, 'missing'), withEdit(step(globalTitle, l.global, 'missing'))];
 
   const localOk = lux.localValue < l.localThreshold;
   return [
     { ...step(localTitle, l.local, localOk ? 'pass' : 'fail'), value: lux.localValue },
     localOk
-      ? step(globalTitle, l.global, 'skip')
-      : { ...step(globalTitle, l.global, lux.globalValue < l.zoneThreshold ? 'pass' : 'fail'), value: lux.globalValue },
+      ? withEdit(step(globalTitle, l.global, 'skip'))
+      : withEdit({ ...step(globalTitle, l.global, lux.globalValue < l.zoneThreshold ? 'pass' : 'fail'), value: lux.globalValue }),
   ];
 }
