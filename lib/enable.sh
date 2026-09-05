@@ -52,7 +52,7 @@ import json,os
 k=os.environ['KEY']
 print(' '.join(r['id'] for r in json.load(open('$TMP/list.json'))['rules']
                 if k in (r['userData'].get('name') or '')))")
-  [ -n "$TARGETS" ] || { echo "没有名字含「$KEY」的规则" >&2; exit 1; }
+  [ -n "$TARGETS" ] || { echo "没有名字含「${KEY}」的规则" >&2; exit 1; }
 else
   TARGETS="$*"
 fi

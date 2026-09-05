@@ -41,7 +41,7 @@ json.dump(d, open(f"{os.environ['OUTDIR']}/{sys.argv[1]}_{slug}.json", 'w', enco
 PY
   n=$((n+1))
 done
-echo "  规则 $n 条${fail:+（失败 $fail）}"
+echo "  规则 $n 条${fail:+（失败 ${fail}）}"
 
 x_retry "$TMP/scopes.json" variable list || exit 1
 : > "$TMP/vars.ndjson"

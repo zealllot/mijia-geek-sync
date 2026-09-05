@@ -98,7 +98,12 @@ mgs enable home off --match 观影   # 按名字停用
 
 **别把 xgg 的输出接进 `head`。** SIGPIPE 会把文件截成 0 字节，而且不报错。
 
-**`rule view` / `rule list` 会偶发返空且不报错。** 所有读取都带大小检查 + 重试。
+**`rule view` / `rule list` 会偶发返空且不报错**（退出码仍是 0）。所有读取都带重试 ——
+但**判据必须是「能解析成 JSON」而不是文件大小**。早期版本用「小于 60 字节 = 失败」，
+在一台没有规则域变量的中枢上把合法的 `variable list`（只有 32 字节）当成了失败。
+
+**bash 里 `$var` 紧跟中文会炸。** `$fail）` 中的全角括号是多字节，bash 会把它当成
+变量名的一部分，`set -u` 下直接报 unbound variable。写中文提示时一律用 `${fail}`。
 
 **`validate` 和 `lint --strict` 查的不是一回事。** `validate` 查 pin、颜色、fan-in、
 spec 和量程；`lint --strict` 还会查**卡片不可达**（某个输出永远不会被触发）。

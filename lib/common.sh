@@ -45,15 +45,22 @@ mgs_xgg_bin() {
 
 x() { node "$MGS_XGG" "$@"; }
 
-# 带重试：rule view / rule list 会偶发返空且不报错
+# 带重试：rule view / rule list / variable get 会偶发返空且不报错（退出码仍是 0）。
+# 判据必须是「能解析成 JSON 且 ok 不为 false」——**不能用文件大小**：
+# 合法响应可以很小（一台没有规则域变量的中枢，variable list 只有 32 字节）。
 x_retry() {   # $1=输出文件，其余=xgg 参数
   local out="$1"; shift
   local a
   for a in 1 2 3; do
     x "$@" 1>"$out" 2>/dev/null
-    [ "$(wc -c <"$out")" -gt 60 ] && return 0
+    if OUT="$out" python3 -c "
+import json,os,sys
+try: d=json.load(open(os.environ['OUT']))
+except Exception: sys.exit(1)
+sys.exit(0 if d.get('ok', True) is not False else 1)
+" 2>/dev/null; then return 0; fi
   done
-  echo "  警告：三次都没取到内容：xgg $*" >&2
+  echo "  警告：三次都没取到有效响应：xgg $*" >&2
   return 1
 }
 

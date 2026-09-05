@@ -40,7 +40,7 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 # ---------- 护栏：本地为空时拒绝全量部署 ----------
 LOCAL_N=$(ls "$GRAPHDIR"/*.json 2>/dev/null | wc -l | tr -d ' ')
 [ "$LOCAL_N" -gt 0 ] || { echo "拒绝执行：$GRAPHDIR 里一个规则文件都没有。先跑 mgs pull" >&2; exit 1; }
-[ -f "$VARFILE" ] || { echo "拒绝执行：找不到 $VARFILE。先跑 mgs pull" >&2; exit 1; }
+[ -f "$VARFILE" ] || { echo "拒绝执行：找不到 ${VARFILE}。先跑 mgs pull" >&2; exit 1; }
 
 bash "$(dirname "${BASH_SOURCE[0]}")/fmt.sh" --check "$GRAPHDIR"/*.json || {
   echo "格式检查未通过，先跑 mgs fmt $GRAPHDIR/*.json" >&2; exit 1; }
