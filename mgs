@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# mgs —— 米家自动化极客版的声明式同步工具
+#
+# 把中枢里的规则图和变量变成本地文件（能进 git、能 diff、能 review），
+# 再全量对账推回去。底层通过 @eyaeya/xgg-cli 与中枢通信。
+#
+#   mgs init                       生成配置骨架
+#   mgs pull   <网关>               全量拉：规则图 + 变量声明
+#   mgs deploy <网关> [--dry-run] [--prune]
+#                                  全量对账推回；--prune 才会删线上多余项
+#   mgs enable <网关> [on|off] ...  启用/停用（与部署完全分开）
+#   mgs fmt    [--check] <文件...>  规范化 / 校验
+#
+# 三条不变量：
+#   1. deploy 永不改变规则的启用状态 —— 线上是什么就是什么
+#   2. deploy 永不覆盖已存在变量的值 —— 变量里混着运行时状态
+#   3. 不给 --prune 就绝不删任何东西
+set -uo pipefail
+LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+
+usage() { awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "${BASH_SOURCE[0]}"; }
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  init)   exec bash "$LIB/init.sh"   "$@" ;;
+  pull)   exec bash "$LIB/pull.sh"   "$@" ;;
+  deploy) exec bash "$LIB/deploy.sh" "$@" ;;
+  enable) exec bash "$LIB/enable.sh" "$@" ;;
+  fmt)    exec bash "$LIB/fmt.sh"    "$@" ;;
+  ""|-h|--help|help) usage ;;
+  *) echo "未知命令: $cmd" >&2; echo >&2; usage >&2; exit 2 ;;
+esac

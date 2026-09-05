@@ -1,0 +1,12 @@
+# 本地配置（含网关地址，可能是内网信息）
+mgs.json
+.mgs.json
+
+# 拉下来的规则图与变量 —— 由使用者自己的仓库保管，不进本工具仓库
+data/
+snapshots/
+
+node_modules/
+.DS_Store
+package.json
+package-lock.json
