@@ -106,7 +106,10 @@ test('骨架从探针和开灯规则生成房间，一个数都不用手写', ()
   const fp = buildFloorplanSkeleton({ '20260822996': probe, '20260822160': open }, names);
 
   assert.equal(fp.rooms.length, 1);
-  assert.deepEqual(fp.rooms[0].lux, { local: 'luxJinMen', localThreshold: 100, global: 'luxQuanJu', zoneThreshold: 1000 });
+  assert.deepEqual(fp.rooms[0].lux, {
+    local: 'luxJinMen', localThreshold: 100, localThresholdNode: 'A3',
+    global: 'luxQuanJu', zoneThreshold: 1000, zoneThresholdNode: 'A3b',
+  });
   assert.equal(fp.rooms[0].rule, '20260822160');
 });
 

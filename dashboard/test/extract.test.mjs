@@ -52,8 +52,8 @@ test('两道照度比较抠成阈值，并映射到对应的照度变量', () =>
   const r = extractRoom(openGraph, extractLuxMap(probeGraph), '20260822160');
 
   assert.deepEqual(r.lux, {
-    local: 'luxJinMen', localThreshold: 100,
-    global: 'luxQuanJu', zoneThreshold: 1000,
+    local: 'luxJinMen', localThreshold: 100, localThresholdNode: 'A3',
+    global: 'luxQuanJu', zoneThreshold: 1000, zoneThresholdNode: 'A3b',
   });
 });
 
@@ -83,4 +83,11 @@ test('照度之后的 varGet 是昼夜分支，不是闸门', () => {
   const r = extractRoom(openGraph, extractLuxMap(probeGraph), '20260822160');
 
   assert.equal(r.chain.some((g) => g.id === 'yeJian'), false);
+});
+
+test('把阈值所在的节点 id 也带出来 —— 要改它就得知道改哪个节点', () => {
+  const r = extractRoom(openGraph, extractLuxMap(probeGraph), '20260822160');
+
+  assert.equal(r.lux.zoneThresholdNode, 'A3b');
+  assert.equal(r.lux.localThresholdNode, 'A3');
 });

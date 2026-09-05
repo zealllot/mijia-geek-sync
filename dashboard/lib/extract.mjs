@@ -52,9 +52,10 @@ export function extractRoom(graph, luxMap, ruleId) {
     if (!localVar) warnings.push(`${a.props.did} 不在照度探针里，抠不出本地照度变量`);
     if (!globalVar) warnings.push(`${b.props.did} 不在照度探针里，抠不出全局照度变量`);
     if (localVar && globalVar) {
+      // 节点 id 一并带出来：阈值是图里的常量，要在看板上改就得知道改哪个节点。
       lux = {
-        local: localVar, localThreshold: a.props.v1,
-        global: globalVar, zoneThreshold: b.props.v1,
+        local: localVar, localThreshold: a.props.v1, localThresholdNode: a.id,
+        global: globalVar, zoneThreshold: b.props.v1, zoneThresholdNode: b.id,
       };
     }
   }
