@@ -119,6 +119,17 @@ export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs 
       return normalizeSnapshot(watchOut, ruleListOut);
     },
 
+    // 拉全部规则图。只在 --init-config 时用一次 —— 抠闸门和阈值要看图本身，
+    // 而 rule list 只给启用状态。
+    async graphs() {
+      const list = unwrap(await callXgg(['rule', 'list'], { run }), 'rule list');
+      const out = {};
+      for (const r of list.rules ?? []) {
+        out[r.id] = unwrap(await callXgg(['rule', 'view', r.id], { run }), `rule view ${r.id}`);
+      }
+      return out;
+    },
+
     async status() {
       return callXgg(['status'], { run });
     },

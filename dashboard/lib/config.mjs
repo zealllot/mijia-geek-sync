@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { extractLuxMap, extractRoom } from './extract.mjs';
 
 // 语义地图的加载与校验。
 //
@@ -84,4 +85,51 @@ function isToggleable(scope, id, v, runtime) {
   if (v.type !== 'number') return false;
   if (v.value !== 0 && v.value !== 1) return false;
   return runtime.some((re) => re.test(id));
+}
+
+// 从规则图生成房间骨架。
+//
+// 阈值、闸门、照度变量全从图里抠（见 extract.mjs），人一个数都不用抄 ——
+// 抄一遍只会抄错，而且改了规则不会同步。
+//
+// 人要给的只有两样：**网格位置**（数据里没有）和**话术**（骨架给的是机器话）。
+export function buildFloorplanSkeleton(graphs, snapshot) {
+  const probe = Object.values(graphs).find((g) =>
+    (g?.nodes ?? []).some((n) => n.type === 'deviceGetSetVar'),
+  );
+  const luxMap = probe ? extractLuxMap(probe) : {};
+  const globals = snapshot?.variables?.global ?? {};
+
+  const rooms = [];
+  const skipped = [];
+  for (const [ruleId, graph] of Object.entries(graphs)) {
+    const name = graph?.cfg?.userData?.name ?? '';
+    if (!/开灯/.test(name)) continue;
+
+    const r = extractRoom(graph, luxMap, ruleId);
+
+    // 判据是结构不是名字：房间的人来灯亮规则一定有那对照度比较，
+    // 场景规则（1302 的「全屋开灯」）没有。按名字过滤会把场景当成房间。
+    if (!r.lux) {
+      skipped.push({ rule: ruleId, name, why: '没有照度判定，看着像场景规则' });
+      continue;
+    }
+
+    rooms.push({
+      title: r.zone,
+      rule: ruleId,
+      col: 1,
+      row: rooms.length + 1,
+      chain: r.chain.map((g) => {
+        const label = globals[g.id]?.name || g.id;
+        // 「要等于几才放行」反推阻塞时该说什么：
+        // 等于 0 才放行 → 挡住的情形是「它开着」；等于 1 才放行 → 是「它关着」。
+        return { ...g, title: label, say: g.equals === 0 ? `${label}开着` : `${label}是关的` };
+      }),
+      ...(r.lux ? { lux: r.lux } : {}),
+    });
+  }
+
+  // 位置只能人给，骨架先竖着排一列 —— 能跑，但一看就知道要挪。
+  return { columns: ['186px', '296px'], rows: rooms.map(() => '110px'), rooms, skipped };
 }

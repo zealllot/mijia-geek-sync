@@ -14,7 +14,7 @@ import { homedir } from 'node:os';
 import { makeGateway } from './lib/gateway.mjs';
 import { makeCache } from './lib/cache.mjs';
 import { buildView, assertWritable } from './lib/state.mjs';
-import { loadConfig, buildSkeleton } from './lib/config.mjs';
+import { loadConfig, buildSkeleton, buildFloorplanSkeleton } from './lib/config.mjs';
 import { resolveGateway } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
@@ -76,7 +76,14 @@ const cache = makeCache({ ttlMs: 10_000, load: () => gw.snapshot() });
 // ---------- --init-config ----------
 if (process.argv.includes('--init-config')) {
   const runtimePatterns = (process.env.MGS_DASH_RUNTIME_VARS || '').split(',').filter(Boolean);
-  const skeleton = buildSkeleton(await gw.snapshot(), { runtimePatterns });
+  const snap = await gw.snapshot();
+  const skeleton = buildSkeleton(snap, { runtimePatterns });
+
+  // 房间那层要看规则图本身（闸门和阈值都写在图里），比快照多一轮拉取。
+  process.stderr.write('拉规则图（抠闸门和阈值）…\n');
+  skeleton.floorplan = buildFloorplanSkeleton(await gw.graphs(), snap);
+  process.stderr.write(`  ${skeleton.floorplan.rooms.length} 个房间 —— 位置要你自己挪，话术要你自己改\n`);
+
   process.stdout.write(JSON.stringify(skeleton, null, 2) + '\n');
   process.exit(0);
 }
