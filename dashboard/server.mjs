@@ -15,7 +15,7 @@ import { makeGateway } from './lib/gateway.mjs';
 import { makeCache } from './lib/cache.mjs';
 import { buildView, assertWritable } from './lib/state.mjs';
 import { loadConfig, buildSkeleton, buildFloorplanSkeleton } from './lib/config.mjs';
-import { resolveGateway } from './lib/address.mjs';
+import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -40,14 +40,41 @@ function loadToken() {
 const TOKEN = loadToken();
 
 // ---------- 网关地址 ----------
-async function baseUrl() {
-  if (process.env.MGS_DASH_BASE_URL) return process.env.MGS_DASH_BASE_URL;
-  // 用户可写的配置优先；.app 里带一份打包时写死的默认值兜底。
-  // bundle 内部是只读的（换版本会被整个替换），所以真正的配置放 Application Support。
-  for (const p of [join(STATE_DIR, 'gateway.json'), join(HERE, 'config', 'gateway.json')]) {
-    if (existsSync(p)) return resolveGateway(JSON.parse(readFileSync(p, 'utf8')));
-  }
-  throw new Error(`还没配网关：写一份 ${join(STATE_DIR, 'gateway.json')}，内容形如 {"mdns":"...","fallback":"192.168.1.100"}`);
+//
+// IP 是 DHCP 分的，会变 —— 所以地址必须能在登录页上改，而且改完立刻生效。
+// 打包时写死一个意味着地址一变，住户就只能等我重新打包。
+//
+// 三层：住户上次**登录成功**用的 → .app 里打包时写死的默认 → 空（让他自己填）。
+const ADDRESS_FILE = join(STATE_DIR, 'address.json');
+let lastTried = null;   // 住户这次填的，即使登录失败也留着，好让他改错字
+let currentBase = null; // 已经解析成 http:// 的那个
+
+function savedAddress() {
+  try { return JSON.parse(readFileSync(ADDRESS_FILE, 'utf8')).input || null; } catch { return null; }
+}
+
+// 打包时写死的默认。整个文件缺失是正常的 —— 住户自己填就行。
+function bundledDefault() {
+  const p = join(HERE, 'config', 'gateway.json');
+  if (!existsSync(p)) return null;
+  try {
+    const g = JSON.parse(readFileSync(p, 'utf8'));
+    return g.mdns || g.fallback || null;
+  } catch { return null; }
+}
+
+// 登录页该预填什么。
+function suggestion() {
+  return lastTried ?? savedAddress() ?? bundledDefault() ?? '';
+}
+
+// mDNS 实例名比 IP 耐用 —— DHCP 换地址它自己会跟着走。
+async function resolveToBase(normalized) {
+  if (!normalized.startsWith('mdns://')) return normalized;
+  const inst = normalized.slice(7);
+  const ip = await resolveMdns(inst);
+  if (!ip) throw new Error(`mDNS 解析不到「${inst}」—— 换成填 IP 试试`);
+  return `http://${ip}`;
 }
 
 function xggCli() {
@@ -62,9 +89,17 @@ function xggCli() {
 const gw = makeGateway({
   nodeBin: process.execPath,
   xggCli: xggCli(),
-  baseUrl: await baseUrl(),
+  baseUrl: () => currentBase,          // 现取，不冻住
   snapshotsDir: join(STATE_DIR, 'snapshots'),
 });
+
+// 启动时先按上次的地址试一把 —— agent 进程要是还活着，住户不用重新登录。
+// 解析不出来不是错误，只是意味着登录页要让他填。
+if (process.env.MGS_DASH_BASE_URL) {
+  currentBase = process.env.MGS_DASH_BASE_URL;
+} else if (suggestion()) {
+  try { currentBase = await resolveToBase(normalizeAddress(suggestion())); } catch { currentBase = null; }
+}
 
 // 语义地图每次读盘：文件小，而且这样改完配置刷新页面就生效，不用重启。
 function config() {
@@ -75,6 +110,10 @@ const cache = makeCache({ ttlMs: 10_000, load: () => gw.snapshot() });
 
 // ---------- --init-config ----------
 if (process.argv.includes('--init-config')) {
+  if (!currentBase) {
+    process.stderr.write('还没有网关地址 —— 设 MGS_DASH_BASE_URL，或者先在页面上登录一次\n');
+    process.exit(2);
+  }
   const runtimePatterns = (process.env.MGS_DASH_RUNTIME_VARS || '').split(',').filter(Boolean);
   const snap = await gw.snapshot();
   const skeleton = buildSkeleton(snap, { runtimePatterns });
@@ -105,13 +144,16 @@ async function readBody(req) {
 
 const routes = {
   async 'GET /api/state'() {
+    // 还没有地址：这不是故障，是第一次用（或者 .app 没打包默认地址）。
+    if (!currentBase) return { ok: false, loggedIn: false, address: suggestion() };
+
     let snapshot;
     try {
       snapshot = await cache.get();
     } catch (e) {
       // 会话过期是常态不是异常 —— 页面要把它当首屏，不是报错。
-      if (e.code === 'AUTH_REQUIRED') return { ok: false, loggedIn: false };
-      return { ok: false, loggedIn: null, error: e.message };
+      if (e.code === 'AUTH_REQUIRED') return { ok: false, loggedIn: false, address: suggestion() };
+      return { ok: false, loggedIn: null, error: e.message, address: suggestion() };
     }
 
     const view = buildView(config(), snapshot);
@@ -119,12 +161,31 @@ const routes = {
   },
 
   async 'POST /api/login'(req) {
-    const { code } = await readBody(req);
+    const { address, code } = await readBody(req);
     if (!/^\d{6}$/.test(String(code ?? ''))) return { ok: false, error: '登录码是 6 位数字' };
 
-    const r = await gw.login(String(code));
-    if (r.ok === false) return { ok: false, error: r.error?.message ?? '登录失败，码可能已经用过或过期了' };
+    // 住户填的地址留着，登录失败也留 —— 好让他在页面上改错字，
+    // 而不是被打回到上一个（已经连不上的）地址。
+    const input = String(address ?? '').trim() || suggestion();
+    lastTried = input;
 
+    let base;
+    try {
+      base = await resolveToBase(normalizeAddress(input));
+    } catch (e) {
+      return { ok: false, error: e.message, address: input };
+    }
+    currentBase = base;
+
+    const r = await gw.login(String(code));
+    if (r.ok === false) {
+      // **不保存** —— 存一个连不上的地址会把下次的默认值弄坏。
+      return { ok: false, error: r.error?.message ?? '登录失败，码可能已经用过或过期了', address: input };
+    }
+
+    // 只有登录成功才落盘，而且存住户填的原文（可能是 mDNS 实例名），不是解析后的 IP。
+    writeFileSync(ADDRESS_FILE, JSON.stringify({ input, base }, null, 2), { mode: 0o600 });
+    lastTried = null;
     cache.invalidate();
     return { ok: true };
   },

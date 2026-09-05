@@ -134,3 +134,27 @@ test('正常响应原样放行', () => {
   assert.deepEqual(unwrap({ rules: [] }, 'rule list'), { rules: [] });
   assert.deepEqual(unwrap({ ok: true, scopes: [] }, 'variable list'), { ok: true, scopes: [] });
 });
+
+import { xggEnv } from '../lib/gateway.mjs';
+
+test('每次调用现取网关地址，不是启动时冻住的那个', () => {
+  // 地址是 DHCP 分的，会变。住户在登录页上改完必须立刻生效 ——
+  // 早期版本在 makeGateway 时就把 baseUrl 算进 env 里，改了也不认。
+  let base = 'http://192.168.5.25';
+  const get = () => base;
+
+  assert.equal(xggEnv(get, '/tmp/s').XGG_BASE_URL, 'http://192.168.5.25');
+  base = 'http://192.168.5.99';
+  assert.equal(xggEnv(get, '/tmp/s').XGG_BASE_URL, 'http://192.168.5.99');
+});
+
+test('提示文字必须关掉，否则会混进 JSON', () => {
+  const env = xggEnv(() => 'http://x', '/tmp/s');
+
+  assert.equal(env.XGG_NO_REFRESH_HINT, '1');
+  assert.equal(env.XGG_NO_NEXT_HINT, '1');
+});
+
+test('还没有地址时不编一个，让调用方去问住户', () => {
+  assert.throws(() => xggEnv(() => null, '/tmp/s'), /还没有网关地址/);
+});

@@ -40,7 +40,6 @@ case "$ARCH" in
      （Apple 芯片是 arm64，Intel 是 x64；让对方在「关于本机」里看一眼）" ;;
   *) die "--arch 只能是 arm64 或 x64" ;;
 esac
-[ -n "$MDNS$FALLBACK" ] || die "至少给一个 --mdns 或 --fallback，否则 .app 不知道连哪台网关"
 
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/mgs-build"
@@ -79,8 +78,12 @@ mv "$STAGE/node-${NODE_VERSION}-darwin-${ARCH}/bin" "$APP/Contents/Resources/nod
 cp -R "$ROOT/dashboard/server.mjs" "$ROOT/dashboard/lib" "$ROOT/dashboard/public" "$APP/Contents/Resources/app/"
 mv "$STAGE/xgg" "$APP/Contents/Resources/app/xgg"
 
-# 打包时写死的默认网关。住户可写的那份在 Application Support，优先级更高 ——
-# bundle 内部是只读的，换版本会被整个替换掉。
+# 打包时写死的默认网关 —— **可选**。给了只是让住户第一次打开时地址已经填好；
+# 他随时能在登录页上改，因为 IP 是 DHCP 分的，写死一个意味着地址一变
+# 他就只能等我重新打包。登录成功用过的地址存在 Application Support，优先级更高。
+if [ -z "$MDNS$FALLBACK" ]; then
+  echo "  没给 --mdns / --fallback —— 住户第一次打开时自己填地址"
+else
 mkdir -p "$APP/Contents/Resources/app/config"
 python3 - "$MDNS" "$FALLBACK" > "$APP/Contents/Resources/app/config/gateway.json" <<'PY'
 import json, sys
@@ -88,6 +91,7 @@ mdns, fallback = sys.argv[1], sys.argv[2]
 print(json.dumps({k: v for k, v in (('mdns', mdns), ('fallback', fallback)) if v},
                  ensure_ascii=False, indent=2))
 PY
+fi
 
 cat > "$APP/Contents/MacOS/launcher" <<'LAUNCHER'
 #!/bin/bash
@@ -194,7 +198,9 @@ cat <<EOF
   1. 解压，把「${APP_NAME}」拖进「应用程序」
   2. 双击。第一次会说「无法验证开发者」—— 去
      系统设置 → 隐私与安全性 → 往下翻到「已阻止使用…」→ 点「仍要打开」
-  3. 之后就是纯双击。页面上要输一次 6 位登录码（米家 App → 中枢网关 → 中枢功能 → 自动化极客版）
+  3. 之后就是纯双击。页面上填中枢地址和一次 6 位登录码
+     （都在米家 App → 中枢网关 → 中枢功能 → 自动化极客版 里看得到）
+     地址会记住。哪天路由器重启后连不上了，在同一个页面上改就行
 
 日志在他机器的 ~/Library/Logs/MijiaDashboard.log
 配置在 ~/Library/Application Support/MijiaDashboard/

@@ -75,22 +75,35 @@ import { spawn } from 'node:child_process';
 //
 // 直接 node <cli.js>，不用 npx —— 实测 npx 每次多 0.54 秒（0.66s vs 0.12s）。
 // XGG_NO_REFRESH_HINT / XGG_NO_NEXT_HINT 必须设，否则 xgg 的提示文字会混进 JSON。
-export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs = 20_000 }) {
-  const baseEnv = {
+// 每次调用现取网关地址，不在 makeGateway 时冻住。
+//
+// 地址是 DHCP 分的，会变；住户在登录页上改完必须立刻生效。
+// XGG_NO_REFRESH_HINT / XGG_NO_NEXT_HINT 必须设，否则 xgg 的提示文字会混进 JSON。
+export function xggEnv(baseUrl, snapshotsDir) {
+  const url = typeof baseUrl === 'function' ? baseUrl() : baseUrl;
+  if (!url) throw new Error('还没有网关地址 —— 让住户在登录页上填一个');
+  return {
     ...process.env,
-    XGG_BASE_URL: baseUrl,
+    XGG_BASE_URL: url,
     XGG_AGENT_MODE: '1',
     XGG_NO_REFRESH_HINT: '1',
     XGG_NO_NEXT_HINT: '1',
     ...(snapshotsDir ? { XGG_SNAPSHOTS_DIR: snapshotsDir } : {}),
   };
+}
+
+export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs = 20_000 }) {
 
   // extraEnv 存在只为登录码：它必须走环境变量而不是 argv。
   // xgg 自己的 --help 就警告 --code 对父进程和 shell history 可见。
   const run = (args, extraEnv = {}) =>
     new Promise((resolve, reject) => {
+      let env;
+      try { env = { ...xggEnv(baseUrl, snapshotsDir), ...extraEnv }; }
+      catch (e) { reject(e); return; }
+
       const child = spawn(nodeBin, [xggCli, ...args], {
-        env: { ...baseEnv, ...extraEnv },
+        env,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 

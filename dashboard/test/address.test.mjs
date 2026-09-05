@@ -40,3 +40,32 @@ test('忽略 Rmv 行（服务下线通告）', () => {
 `;
   assert.equal(parseDnsSd(withRmv), '192.168.5.25');
 });
+
+import { normalizeAddress } from '../lib/address.mjs';
+
+test('光给 IP 就补上 http://', () => {
+  assert.equal(normalizeAddress('192.168.5.25'), 'http://192.168.5.25');
+});
+
+test('已经带 http:// 的原样接受', () => {
+  assert.equal(normalizeAddress('http://192.168.5.25'), 'http://192.168.5.25');
+});
+
+test('带端口的保留端口', () => {
+  assert.equal(normalizeAddress('192.168.5.25:8086'), 'http://192.168.5.25:8086');
+});
+
+test('两头的空格和末尾的斜杠都清掉', () => {
+  // 住户是从米家 App 里抄过来的，粘贴常常带这些。
+  assert.equal(normalizeAddress('  192.168.5.25/  '), 'http://192.168.5.25');
+});
+
+test('mDNS 实例名也能填', () => {
+  // 比 IP 更耐用 —— DHCP 换地址它自己会跟着走。
+  assert.equal(normalizeAddress('xiaomi-gateway-hub1-A1B2'), 'mdns://xiaomi-gateway-hub1-A1B2');
+});
+
+test('填了看不懂的东西要报错，不能默默拼成一个坏地址', () => {
+  assert.throws(() => normalizeAddress('这是什么'), /填不对/);
+  assert.throws(() => normalizeAddress(''), /填不对/);
+});

@@ -137,6 +137,11 @@ details.spare[open] > summary::before { content: "- "; }
 .gate-screen p { font-family: var(--sans); color: var(--dim); font-size: 13.5px; margin: 0; }
 .gate-screen ol { text-align: left; font-family: var(--sans); color: var(--dim); font-size: 13.5px; line-height: 2.05; padding-left: 22px; margin: 24px 0 26px; }
 .gate-screen ol b { color: var(--ink); font-weight: 400; }
+.field { text-align: left; margin-bottom: 14px; }
+.field label { display: block; font-size: 10px; letter-spacing: .22em; color: var(--faint); margin-bottom: 7px; }
+.field .hint { font-family: var(--sans); font-size: 11.5px; color: var(--ghost); margin-top: 7px; line-height: 1.6; }
+.addr { width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink); font: 400 15px/1 var(--mono); letter-spacing: .04em; padding: 13px 14px; outline: none; }
+.addr:focus { border-color: var(--bright); }
 .code { width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink-hi); font: 400 28px/1 var(--mono); letter-spacing: .42em; text-align: center; padding: 19px 0 19px .42em; outline: none; }
 .code:focus { border-color: var(--bright); }
 .btn { margin-top: 12px; width: 100%; padding: 14px; cursor: pointer; background: var(--ok); color: #0b1710; border: none; font: 400 14px/1 var(--sans); letter-spacing: .1em; }
@@ -171,8 +176,8 @@ let timer = null, lastFetch = null, picked = null, state = null;
 const LED = { clear: 'ok', bright: 'bright', blocked: 'alert', unconfigured: 'dead', unknown: 'alert' };
 
 function render(s) {
-  if (s.loggedIn === false) return renderGate();
-  if (!s.ok) return renderTrouble(s.error);
+  if (s.loggedIn === false) return renderGate(s.address);
+  if (!s.ok) return renderTrouble(s.error, s.address);
   state = s; lastFetch = Date.now();
 
   const fp = s.floorplan;
@@ -294,35 +299,59 @@ function renderSpare(u) {
     <div class="tiles">${tiles.map(renderCard).join('')}</div></details>`;
 }
 
-function renderGate() {
+function renderGate(address, msg) {
+  const addr = address ?? '';
   app.innerHTML = `<div class="gate-screen">
-    <h1>要一个新的登录码</h1>
-    <p>中枢的登录码短时有效，隔一阵就要重取一次。</p>
+    <h1>${addr ? '要一个新的登录码' : '连上中枢'}</h1>
+    <p>${addr ? '中枢的登录码短时有效，隔一阵就要重取一次。' : '第一次用，先告诉它中枢在哪。'}</p>
     <ol>
       <li>打开<b>米家 App</b></li><li>进<b>中枢网关</b>那台设备</li>
       <li>点<b>中枢功能 &rarr; 自动化极客版</b></li><li>抄下页面上那个<b>6 位数字</b></li>
     </ol>
-    <input class="code" id="code" inputmode="numeric" maxlength="6">
+    <div class="field">
+      <label>中枢地址</label>
+      <input class="addr" id="addr" value="${esc(addr)}" placeholder="192.168.1.100" spellcheck="false" autocapitalize="off">
+      <div class="hint">连不上就改这里 &mdash; 路由器重启后地址可能变了。
+        填米家 App 里显示的那个 IP；或者填中枢的 mDNS 实例名，那个换 IP 也不用改。</div>
+    </div>
+    <div class="field">
+      <label>6 位登录码</label>
+      <input class="code" id="code" inputmode="numeric" maxlength="6">
+    </div>
     <button class="btn" id="go">登录</button>
-    <div class="err" id="err"></div></div>`;
-  const code = document.getElementById('code'), go = document.getElementById('go'), err = document.getElementById('err');
+    <div class="err" id="err">${esc(msg ?? '')}</div></div>`;
+
+  const addrEl = document.getElementById('addr'), code = document.getElementById('code'),
+        go = document.getElementById('go'), err = document.getElementById('err');
+
   const submit = async () => {
-    if (!/^\d{6}$/.test(code.value)) { err.textContent = '要 6 位数字'; return; }
+    if (!/^\d{6}$/.test(code.value)) { err.textContent = '登录码要 6 位数字'; code.focus(); return; }
     go.disabled = true; err.textContent = '';
-    const r = await api('/api/login', { code: code.value }).catch((e) => ({ ok: false, error: e.message }));
+    const r = await api('/api/login', { address: addrEl.value, code: code.value })
+      .catch((e) => ({ ok: false, error: e.message }));
     go.disabled = false;
     if (r.ok) return poll();
-    code.value = ''; err.textContent = r.error ?? '登录失败';
+    // 码是一次性的，清掉；地址留着 —— 他可能正是要在这儿改错字。
+    code.value = '';
+    if (r.address !== undefined) addrEl.value = r.address;
+    err.textContent = r.error ?? '登录失败';
+    code.focus();
   };
+
   go.onclick = submit;
-  code.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
-  code.focus();
+  for (const el of [addrEl, code]) el.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+  // 地址已经有了就直接落在登录码上 —— 多数时候地址不用动。
+  (addr ? code : addrEl).focus();
 }
 
-function renderTrouble(message) {
+function renderTrouble(message, address) {
   app.innerHTML = `<div class="gate-screen"><h1>连不上中枢</h1>
     <p>${esc(message ?? '')}</p>
-    <p style="color:var(--faint);font-size:12.5px;margin-top:22px">路由器和中枢网关都通电了吗？会自动重试。</p></div>`;
+    <p style="color:var(--faint);font-size:12.5px;margin-top:20px">路由器和中枢网关都通电了吗？会自动重试。</p>
+    <button class="mini" id="fix" style="margin-top:20px">改中枢地址</button></div>`;
+  const b = document.getElementById('fix');
+  // 路由器重启后地址会变，这是最常见的「连不上」—— 得给一条自己改的出口。
+  if (b) b.onclick = () => { clearTimeout(timer); renderGate(address ?? '', message); };
 }
 
 function wireRooms() {
