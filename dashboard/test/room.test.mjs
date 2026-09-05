@@ -96,3 +96,29 @@ test('照度变量读不到时仍说「没发现阻碍」，但标明照度未�
   assert.equal(r.state, 'clear');
   assert.equal(r.luxKnown, false);
 });
+
+test('本地照度成立时，全局那道在规则里根本不会跑，标成没走到', () => {
+  // 图里 A3 成立就直接进 signalOr，A3b 只挂在 A3 的 output2 上。
+  const r = evaluateRoom(livingRoom, vars({ luxJinMen: { type: 'number', value: 45 } }));
+
+  const lux = r.chain.slice(-2);
+  assert.deepEqual(lux.map((c) => c.status), ['pass', 'skip']);
+});
+
+test('两道照度都不成立时都标「不成立」，不是「断在这里」', () => {
+  // 「断」意味着到此为止；两条腿是「或」，都不成立才是一起没过，说法要区分开。
+  const r = evaluateRoom(livingRoom, vars({
+    luxJinMen: { type: 'number', value: 210 },
+    luxQuanJu: { type: 'number', value: 1200 },
+  }));
+
+  const lux = r.chain.slice(-2);
+  assert.deepEqual(lux.map((c) => c.status), ['fail', 'fail']);
+});
+
+test('照度步骤带 lux 标记，好让页面换一套说法', () => {
+  const r = evaluateRoom(livingRoom, vars());
+
+  assert.deepEqual(r.chain.slice(-2).map((c) => c.kind), ['lux', 'lux']);
+  assert.equal(r.chain[0].kind, 'gate');
+});

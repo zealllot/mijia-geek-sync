@@ -28,18 +28,18 @@ export function evaluateRoom(room, snapshot) {
     const ref = `${gate.scope}.${gate.id}`;
 
     if (broke) {
-      chain.push({ title: gate.title, ref, status: 'skip' });
+      chain.push({ kind: 'gate', title: gate.title, ref, status: 'skip' });
       continue;
     }
     if (v === undefined) {
       unresolved.push(ref);
-      chain.push({ title: gate.title, ref, status: 'missing' });
+      chain.push({ kind: 'gate', title: gate.title, ref, status: 'missing' });
       broke = { say: `配置引用的 ${ref} 在网关上不存在`, missing: true };
       continue;
     }
 
     const pass = v.value === gate.equals;
-    chain.push({ title: gate.title, ref, value: v.value, status: pass ? 'pass' : 'break' });
+    chain.push({ kind: 'gate', title: gate.title, ref, value: v.value, status: pass ? 'pass' : 'break' });
     if (!pass) broke = gate;
   }
 
@@ -76,16 +76,27 @@ function readLux(room, snapshot) {
   };
 }
 
+// 照度那两道在规则图里是**短路**的：A3 成立就直接进 signalOr，
+// A3b 只挂在 A3 的 output2 上。页面照实反映，不能显示成两道都跑了。
+//
+// 状态也和闸门分开：闸门不通是「断在这里」（到此为止），
+// 照度不成立是「不成立」—— 两条腿是「或」，一条不成立还有另一条。
 function luxSteps(room, lux, skipped) {
   const l = room.lux;
   if (!l) return [];
-  const mk = (title, ref, value, ok) => ({
-    title, ref: value === undefined ? ref : `${ref} = ${value}`,
-    status: skipped ? 'skip' : (value === undefined ? 'missing' : (ok ? 'pass' : 'break')),
-  });
-  if (!lux) return [mk(`本地照度 < ${l.localThreshold}`, l.local), mk(`全局照度 < ${l.zoneThreshold}`, l.global)];
+
+  const step = (title, ref, status) => ({ kind: 'lux', title, ref, status });
+  const localTitle = `本地照度 < ${l.localThreshold}`;
+  const globalTitle = `全局照度 < ${l.zoneThreshold}`;
+
+  if (skipped) return [step(localTitle, l.local, 'skip'), step(globalTitle, l.global, 'skip')];
+  if (!lux) return [step(localTitle, l.local, 'missing'), step(globalTitle, l.global, 'missing')];
+
+  const localOk = lux.localValue < l.localThreshold;
   return [
-    mk(`本地照度 < ${l.localThreshold}`, l.local, lux.localValue, lux.localValue < l.localThreshold),
-    mk(`全局照度 < ${l.zoneThreshold}`, l.global, lux.globalValue, lux.globalValue < l.zoneThreshold),
+    { ...step(localTitle, l.local, localOk ? 'pass' : 'fail'), value: lux.localValue },
+    localOk
+      ? step(globalTitle, l.global, 'skip')
+      : { ...step(globalTitle, l.global, lux.globalValue < l.zoneThreshold ? 'pass' : 'fail'), value: lux.globalValue },
   ];
 }
