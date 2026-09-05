@@ -66,13 +66,22 @@ sys.exit(0 if d.get('ok', True) is not False else 1)
 
 # ---------- 网关 ----------
 # IP 由 DHCP 分配会变，按 mDNS 实例名解析，失败回落到配置里的 fallback。
+#
+# 解析 dns-sd 的输出有两个坑：
+#   1. `...STARTING...` 那行也以数字开头。早期这里用 awk '/^[0-9]/{print $6; exit}'，
+#      会匹配到它、打印出空的地址列就退出 —— **mDNS 解析从来没成功过**，
+#      只是每次都静默回落到 fallback，所以看不出来。DHCP 一换地址就抓瞎。
+#   2. 第一条 Add 可能是回环地址（解析本机名时 127.0.0.1 排在前面），
+#      取「第一条 Add」会让工具去连自己。
+# 所以判据是：A/R 列必须是 Add，地址列必须是像样的 IPv4，且不是回环或 link-local。
 mgs_base_url() {
   local g="$1" inst fb ip
   case "$g" in http://*|https://*) echo "$g"; return 0 ;; esac
   inst="$(mgs_cfg "cfg['gateways']['$g'].get('mdns','')")"
   fb="$(mgs_cfg "cfg['gateways']['$g'].get('fallback','')")"
   [ -n "$inst$fb" ] || die "配置里没有网关 '$g'（有的是：$(mgs_cfg "' '.join(cfg.get('gateways',{}))")）"
-  [ -n "$inst" ] && ip=$(dns-sd -t 3 -G v4 "$inst.local" 2>/dev/null | awk '/^[0-9]/{print $6; exit}')
+  [ -n "$inst" ] && ip=$(dns-sd -t 3 -G v4 "$inst.local" 2>/dev/null | awk '
+    $2=="Add" && $6 ~ /^[0-9]+(\.[0-9]+){3}$/ && $6 !~ /^127\./ && $6 !~ /^169\.254\./ {print $6; exit}')
   echo "http://${ip:-$fb}"
 }
 

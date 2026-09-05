@@ -53,3 +53,71 @@ export async function callXgg(args, { run, attempts = 3 } = {}) {
   }
   throw new Error(`xgg ${args.join(' ')}：${attempts} 次都没拿到有效响应（${last}）`);
 }
+
+import { spawn } from 'node:child_process';
+
+// 真正的子进程调用。
+//
+// 直接 node <cli.js>，不用 npx —— 实测 npx 每次多 0.54 秒（0.66s vs 0.12s）。
+// XGG_NO_REFRESH_HINT / XGG_NO_NEXT_HINT 必须设，否则 xgg 的提示文字会混进 JSON。
+export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs = 20_000 }) {
+  const baseEnv = {
+    ...process.env,
+    XGG_BASE_URL: baseUrl,
+    XGG_AGENT_MODE: '1',
+    XGG_NO_REFRESH_HINT: '1',
+    XGG_NO_NEXT_HINT: '1',
+    ...(snapshotsDir ? { XGG_SNAPSHOTS_DIR: snapshotsDir } : {}),
+  };
+
+  // extraEnv 存在只为登录码：它必须走环境变量而不是 argv。
+  // xgg 自己的 --help 就警告 --code 对父进程和 shell history 可见。
+  const run = (args, extraEnv = {}) =>
+    new Promise((resolve, reject) => {
+      const child = spawn(nodeBin, [xggCli, ...args], {
+        env: { ...baseEnv, ...extraEnv },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let out = '';
+      child.stdout.on('data', (d) => (out += d));
+      child.stderr.resume();
+
+      // xgg 自己有 --timeout，但子进程本身可能卡住。
+      // 硬杀掉并给一个结构化错误，好过把 HTTP 请求挂死。
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error(`xgg ${args[0]} ${args[1] ?? ''} 超过 ${timeoutMs}ms 没返回`));
+      }, timeoutMs);
+
+      child.on('error', (e) => (clearTimeout(timer), reject(e)));
+      child.on('close', () => (clearTimeout(timer), resolve(out)));
+    });
+
+  return {
+    // 一轮完整刷新只有 2 次子进程调用：variable watch 一次拿全 scope。
+    async snapshot() {
+      const [watchOut, ruleListOut] = await Promise.all([
+        callXgg(['variable', 'watch'], { run }),
+        callXgg(['rule', 'list'], { run }),
+      ]);
+      return normalizeSnapshot(watchOut, ruleListOut);
+    },
+
+    async status() {
+      return callXgg(['status'], { run });
+    },
+
+    async login(code) {
+      return callXgg(['login'], { run: (args) => run(args, { XGG_LOGIN_CODE: code }), attempts: 1 });
+    },
+
+    // 保留 xgg 默认的写前快照。在别人家里改他正在生效的状态，得有回头路。
+    async setVariable({ scope, id, value, type }) {
+      return callXgg(
+        ['variable', 'set-value', '--scope', scope, '--id', id, '--value', String(value), '--type', type],
+        { run, attempts: 1 },
+      );
+    },
+  };
+}
