@@ -151,15 +151,16 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .gate .g-name { font-family: var(--sans); font-size: 13px; color: var(--ink); flex: 0 0 130px; }
 .gate .g-ref { font-size: 10.5px; color: var(--faint); flex-grow: 1; word-break: break-all; }
 .gate .g-note { font-size: 10.5px; letter-spacing: .1em; color: var(--faint); white-space: nowrap; }
+.gate.pass .g-note { color: var(--ok); }
 .gate.break { background: color-mix(in srgb, var(--alert) 14%, var(--panel)); border-color: color-mix(in srgb, var(--alert) 60%, transparent); }
 .gate.break .g-name { color: var(--ink-hi); } .gate.break .g-note { color: var(--alert); }
 /* 不成立：判过了、条件没满足 —— 有信息，看得清 */
 .gate.fail { background: color-mix(in srgb, var(--bright) 10%, var(--panel)); border-color: color-mix(in srgb, var(--bright) 40%, transparent); }
 
 /* 没走到这一步：压根没判 —— 没信息，整行退到背景里去 */
-.gate.skip { background: color-mix(in srgb, var(--panel) 38%, transparent); border-color: var(--line-dim); opacity: .7; }
+.gate.skip { background: color-mix(in srgb, var(--panel) 38%, transparent); border-color: var(--line-dim); }
 .gate.fail .g-name { color: var(--ink); }
-.gate.skip .g-name { color: color-mix(in srgb, var(--ink) 42%, transparent); } .gate.skip .g-ref, .gate.skip .g-note { color: var(--ghost); }
+.gate.skip .g-name { color: color-mix(in srgb, var(--ink) 62%, transparent); } .gate.skip .g-ref, .gate.skip .g-note { color: var(--faint); }
 .gate.fail .g-note { color: var(--bright); }
 .gate.missing { border-color: var(--alert); } .gate.missing .g-note { color: var(--alert); }
 .note { margin-top: 14px; font-size: 9.5px; line-height: 1.8; color: color-mix(in srgb, var(--ink) 32%, transparent); letter-spacing: .06em; }
