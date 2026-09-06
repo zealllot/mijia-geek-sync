@@ -33,10 +33,53 @@ export function applyLayout(config, layout) {
   if (config.groups) {
     out.groups = config.groups.map((g) => ({
       ...g,
-      cards: g.cards.map((c) => ({ ...c, ...pick(tiles[cardRef(c)]) })),
+      cards: autoPlace(g.cards.map((c) => ({ ...c, ...pick(tiles[cardRef(c)]) }))),
     }));
   }
   return out;
+}
+
+// 同组里有卡片摆过位置时，没摆过的得自己找个空位。
+//
+// 前端的规则是「只要有一张摆过，整组就切成绝对定位」——
+// 那时候没位置的会落在 (0,0)，跟第一张糊在一起，两个标题叠着看不清。
+// 这不是假想：配置里后加一张卡（会客模式），而 layout 是加它之前存的，
+// 就正好是这个情形。
+//
+// 一整组都没摆过就不给位置 —— 那时候该走 CSS 自动排版，那样更好看。
+export const TILE = { w: 222, h: 45, gap: 6, cols: 5 };
+
+export function autoPlace(cards) {
+  const taken = cards.filter(hasBox);
+  if (!taken.length || taken.length === cards.length) return cards;
+
+  const boxes = [...taken];
+  return cards.map((c) => {
+    if (hasBox(c)) return c;
+    const spot = freeSlot(boxes);
+    boxes.push(spot);
+    return { ...c, ...spot };
+  });
+}
+
+// 逐格扫，第一个不跟已占的相交的格子就是它 —— 会自然填上中间的空洞。
+function freeSlot(boxes) {
+  const stepX = TILE.w + TILE.gap, stepY = TILE.h + TILE.gap;
+  for (let row = 0; row < 200; row++) {
+    for (let col = 0; col < TILE.cols; col++) {
+      const spot = { x: col * stepX, y: row * stepY, w: TILE.w, h: TILE.h };
+      if (!boxes.some((b) => intersects(b, spot))) return spot;
+    }
+  }
+  return { x: 0, y: 200 * (TILE.h + TILE.gap), w: TILE.w, h: TILE.h };
+}
+
+function intersects(p, q) {
+  return p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
+}
+
+function hasBox(c) {
+  return ['x', 'y', 'w', 'h'].every((k) => typeof c[k] === 'number');
 }
 
 // 位置按**规则 id** 存，不按房间名 —— 房间名是会改的（「沙发」改成「客厅」），

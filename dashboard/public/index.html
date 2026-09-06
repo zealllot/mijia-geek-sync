@@ -210,6 +210,21 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 }
 .thr-edit::-webkit-outer-spin-button, .thr-edit::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
+/* 编辑模式的分类标题：改名、删掉、当「挪进这里」的落点 */
+.cap.grouphead { display: flex; align-items: center; gap: 8px; }
+.gname {
+  background: none; border: 1px solid transparent; color: var(--faint);
+  font: inherit; letter-spacing: .26em; padding: 1px 4px; border-radius: 3px;
+}
+.gname:hover, .gname:focus { border-color: var(--line); color: var(--ink); outline: none; }
+.gdrop, .gdel {
+  background: none; border: 1px solid var(--line); color: var(--faint);
+  font: inherit; letter-spacing: normal; padding: 0 6px; border-radius: 3px; cursor: pointer;
+}
+.gdrop:hover, .gdel:hover { border-color: var(--bright); color: var(--ink-hi); }
+#gadd { margin-top: 4px; }
+.spare summary .gdrop { margin-left: 8px; }
+
 /* ---------- 模式开关 ---------- */
 .tiles { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); }
 .tiles.placed { display: block; position: relative; overflow-x: auto; max-width: 100%; }
@@ -291,6 +306,7 @@ async function api(path, body) {
 
 let timer = null, lastFetch = null, picked = null, state = null, spareOpen = false;
 let editing = false, draft = null, swapPick = null;   // draft = 编辑中的外观，保存前不落盘
+let groupsTouched = false;                            // 分组动过才写 dashboard.json
 
 const bgLayer = document.createElement('div');
 bgLayer.id = 'bg';
@@ -395,8 +411,9 @@ function render(s) {
       <div class="col detail">${sel ? renderChain(sel) : ''}</div>
     </div>
     <div style="padding:0 22px 30px">
-      ${(s.groups ?? []).map(renderGroup).join('')}
-      ${renderSpare(s.unmapped)}
+      ${(editing ? draftGroups(s) : (s.groups ?? [])).map(renderGroup).join('')}
+      ${editing ? '<button class="btn-s" id="gadd">＋ 新建分类</button>' : ''}
+      ${renderSpare(spareOf(s))}
     </div>
     <div class="bar bot">
       <span id="ago">刚刚更新</span>
@@ -525,14 +542,60 @@ function gateTitle(g) {
     title="点一下改这个阈值">${esc(g.edit.value)}</button>`;
 }
 
+// 编辑模式下分组归属来自 draft.groups（点一下就能看见挪过去了），
+// 卡片本体还是从服务端那份里按 ref 取 —— 页面不造卡片定义。
+function draftGroups(s) {
+  const by = cardIndex(s);
+  return (draft?.groups ?? []).map((g) => ({
+    title: g.title,
+    cards: g.refs.map((r) => by.get(r)).filter(Boolean),
+  }));
+}
+
+// 未归类 = 所有认得的卡片，减去当前归进分组的那些。
+//
+// 编辑期间必须这么算，不能直接用服务端那份 —— 不然编辑模式里删掉一个分类，
+// 它的卡片既不在分组里、也不在服务端算的未归类里，会整个从页面上消失。
+function spareOf(s) {
+  const by = cardIndex(s);
+  const inGroups = new Set(
+    (editing ? (draft?.groups ?? []) : (s.groups ?? []).map((g) => ({ refs: g.cards.map(cardRef) })))
+      .flatMap((g) => g.refs),
+  );
+  return [...by.entries()].filter(([ref]) => !inGroups.has(ref)).map(([, c]) => c);
+}
+
+// ref → 可渲染的卡片。分组里的和未归类的都收进来。
+function cardIndex(s) {
+  const by = new Map();
+  for (const c of (s.groups ?? []).flatMap((g) => g.cards)) by.set(cardRef(c), c);
+  for (const v of s.unmapped?.variables ?? []) {
+    const c = { kind: 'readonly', title: v.title, scope: v.scope, id: v.id, value: v.value };
+    if (!by.has(cardRef(c))) by.set(cardRef(c), c);
+  }
+  for (const r of s.unmapped?.rules ?? []) {
+    const c = { kind: 'rule', title: r.title, ruleId: r.ruleId, enable: r.enable };
+    if (!by.has(cardRef(c))) by.set(cardRef(c), c);
+  }
+  return by;
+}
+
 function renderGroup(g) {
   const cards = g.cards.map((c) => ({ ...c, ref: cardRef(c) }));
   // 摆过位置的就用画布；一张都没摆过就保持自动排版。
   const anyPlaced = cards.some((c) => placed(draft?.tiles?.[c.ref] ?? c));
   const size = anyPlaced ? planSize(cards.map((c) => ({ ...(placed(draft?.tiles?.[c.ref] ?? c) ?? {}), ref: c.ref }))) : null;
 
+  const cap = editing
+    ? `<div class="cap grouphead" data-group="${esc(g.title)}">
+         <input class="gname" data-group="${esc(g.title)}" value="${esc(g.title)}" size="12">
+         <button class="gdrop" data-group="${esc(g.title)}">${swapPick ? '挪进这里' : '↳'}</button>
+         <button class="gdel" data-group="${esc(g.title)}" title="删掉这个分类（卡片回到未归类）">×</button>
+       </div>`
+    : `<div class="cap">${esc(g.title)}</div>`;
+
   return `<section>
-    <div class="cap">${esc(g.title)}</div>
+    ${cap}
     <div class="tiles${anyPlaced ? ' placed' : ''}"${size ? ` style="height:${size.h}px"` : ''}>${
       cards.map((c) => renderCard(c, anyPlaced)).join('')}</div>
   </section>`;
@@ -569,16 +632,19 @@ function renderCard(c, positioned) {
   return `<div class="tile" title="${ref}"${tag}>${head}<span class="v">${esc(c.value)}${unit}</span></div>`;
 }
 
-function renderSpare(u) {
-  if (!u || (!u.variables.length && !u.rules.length)) return '';
-  const tiles = [
-    ...u.rules.map((r) => ({ kind: 'rule', title: r.title, ruleId: r.ruleId, enable: r.enable })),
-    ...u.variables.map((v) => ({ kind: 'readonly', title: v.title, scope: v.scope, id: v.id, value: v.value })),
-  ];
+function renderSpare(tiles) {
+  if (!tiles?.length) return editing ? spareDrop(0) : '';
   // 展开状态要跨渲染保留 —— 每 10 秒轮询一次，重画时把它合上会很烦人。
-  return `<details class="spare"${spareOpen ? ' open' : ''}><summary>未归类 ${tiles.length} 项</summary>
+  return `<details class="spare"${spareOpen ? ' open' : ''}><summary>未归类 ${tiles.length} 项${
+    editing ? ` <button class="gdrop" data-group="">${swapPick ? '挪回这里' : '↳'}</button>` : ''}</summary>
     <div class="note zh" style="margin:4px 0 12px">这些没写进配置，所以没有分组也没有结论 —— 但不会被藏起来。</div>
-    <div class="tiles">${tiles.map(renderCard).join('')}</div></details>`;
+    <div class="tiles">${tiles.map((c) => renderCard(c)).join('')}</div></details>`;
+}
+
+// 一件都不剩时也要留个落点，不然挪出去的东西没法挪回来。
+function spareDrop() {
+  return `<details class="spare" open><summary>未归类 0 项
+    <button class="gdrop" data-group="">${swapPick ? '挪回这里' : '↳'}</button></summary></details>`;
 }
 
 function renderGate(address, msg, s) {
@@ -880,6 +946,9 @@ function seedDraft() {
   draft = structuredClone(state.layout ?? {});
   draft.rooms ??= {};
   draft.tiles ??= {};
+  // 分组归属也进 draft —— 挪错了「取消」要能全撤回来。
+  draft.groups = (state.groups ?? []).map((g) => ({ title: g.title, refs: g.cards.map(cardRef) }));
+  groupsTouched = false;
 
   // 按规则 id 存；顺手把旧的按名字存的那条搬过来，不然升级后位置会重置。
   for (const r of state.floorplan?.rooms ?? []) {
@@ -968,11 +1037,16 @@ function wireEdit() {
 
 async function exitEdit(save) {
   if (save) {
+    // 分组先写 —— 它决定有哪些卡片，位置是跟着卡片走的。
+    if (groupsTouched) {
+      const g = await api('/api/groups', { groups: draft.groups }).catch((e) => ({ ok: false, error: e.message }));
+      if (!g.ok) return alert((g.error ?? '分组保存失败') + '\n\n还在编辑模式，改好再保存。');
+    }
     const r = await api('/api/layout', draft).catch((e) => ({ ok: false, error: e.message }));
     // 保存失败就**留在编辑模式**，别让人以为存上了。
     if (!r.ok) return alert((r.error ?? '保存失败') + '\n\n还在编辑模式，改好再保存。');
   }
-  editing = false; draft = null; swapPick = null;
+  editing = false; draft = null; swapPick = null; groupsTouched = false;
   document.body.classList.remove('editing');
   poll();
 }
@@ -1027,24 +1101,101 @@ function wireDrag() {
 function wireSwap() {
   if (!editing) return;
 
-  for (const el of app.querySelectorAll('section .tiles .tile[data-tile]')) {
+  // 未归类里的也能选中 —— 选中之后点分类标题就挪进去。
+  for (const el of app.querySelectorAll('.tiles .tile[data-tile]')) {
     const key = el.dataset.tile;
-    if (!draft.tiles[key]) continue;
 
     el.onclick = () => {
-      if (swapPick === key) { swapPick = null; return paint(); }
-      if (!swapPick) { swapPick = key; return paint(); }
+      if (swapPick === key) { swapPick = null; return render(state); }
+      if (!swapPick) { swapPick = key; return render(state); }
 
-      const a = draft.tiles[swapPick], b = draft.tiles[key];
-      [a.x, a.y, b.x, b.y] = [b.x, b.y, a.x, a.y];
-      swapPick = null;
-      render(state);
+      const from = groupOf(swapPick), to = groupOf(key);
+      // 同一组里点两下 = 换位置；跨组点 = 挪过去。
+      if (from === to && draft.tiles[swapPick] && draft.tiles[key]) {
+        const a = draft.tiles[swapPick], b = draft.tiles[key];
+        [a.x, a.y, b.x, b.y] = [b.x, b.y, a.x, a.y];
+        swapPick = null;
+        return render(state);
+      }
+      moveTo(swapPick, to);
     };
   }
+
+  for (const el of app.querySelectorAll('.gdrop')) {
+    el.onclick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!swapPick) return;
+      moveTo(swapPick, el.dataset.group || null);
+    };
+  }
+
+  for (const el of app.querySelectorAll('.gname')) {
+    // 改名用 change 不用 input —— 每敲一个字就重画会把光标冲掉。
+    el.onchange = () => {
+      const g = draft.groups.find((x) => x.title === el.dataset.group);
+      const name = el.value.trim().slice(0, 24);
+      if (!g || !name || draft.groups.some((x) => x !== g && x.title === name)) return render(state);
+      g.title = name; groupsTouched = true; render(state);
+    };
+  }
+
+  for (const el of app.querySelectorAll('.gdel')) {
+    el.onclick = () => {
+      // 卡片不会消失，回到未归类 —— 删的是分类，不是里面的东西。
+      const g = draft.groups.find((x) => x.title === el.dataset.group);
+      if (!g) return;
+      for (const ref of g.refs) delete draft.tiles[ref];
+      draft.groups = draft.groups.filter((x) => x !== g);
+      groupsTouched = true; swapPick = null; render(state);
+    };
+  }
+
+  const add = document.getElementById('gadd');
+  if (add) add.onclick = () => {
+    let name = '新分类', n = 2;
+    while (draft.groups.some((g) => g.title === name)) name = `新分类 ${n++}`;
+    draft.groups.push({ title: name, refs: [] });
+    groupsTouched = true; render(state);
+  };
+
   paint();
 
+  // 这张卡现在归哪一组（null = 未归类）。
+  function groupOf(ref) {
+    return draft.groups.find((g) => g.refs.includes(ref))?.title ?? null;
+  }
+
+  // 挪：从原来那组摘掉，放进目标组。挪回未归类就把位置也扔了。
+  function moveTo(ref, title) {
+    draft.groups = draft.groups.map((g) => ({ ...g, refs: g.refs.filter((r) => r !== ref) }));
+
+    if (title === null) {
+      delete draft.tiles[ref];
+    } else {
+      const g = draft.groups.find((x) => x.title === title);
+      if (!g) return;
+      g.refs.push(ref);
+      // 给它一个空位 —— 不给的话它会落在 (0,0)，跟那组第一张叠在一起。
+      draft.tiles[ref] ??= freeSlotIn(g);
+    }
+    groupsTouched = true; swapPick = null; render(state);
+  }
+
+  // 跟服务端 layout.mjs 的 autoPlace 同一套格子。
+  function freeSlotIn(g) {
+    const taken = g.refs.map((r) => draft.tiles[r]).filter(Boolean);
+    const W = 222, H = 45, GAP = 6, COLS = 5;
+    for (let row = 0; row < 200; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const spot = { x: col * (W + GAP), y: row * (H + GAP), w: W, h: H };
+        if (!taken.some((b) => b.x < spot.x + spot.w && spot.x < b.x + b.w && b.y < spot.y + spot.h && spot.y < b.y + b.h)) return spot;
+      }
+    }
+    return { x: 0, y: 0, w: W, h: H };
+  }
+
   function paint() {
-    for (const el of app.querySelectorAll('section .tiles .tile[data-tile]')) {
+    for (const el of app.querySelectorAll('.tiles .tile[data-tile]')) {
       el.classList.toggle('swapsel', el.dataset.tile === swapPick);
     }
   }

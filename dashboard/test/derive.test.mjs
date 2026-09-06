@@ -127,3 +127,21 @@ test('hide 带过去 —— 电梯口那种不想显示的', () => {
 test('没有配置时是个空覆盖层，不是崩', () => {
   assert.deepEqual(overlayFromConfig(null), { rooms: {}, hide: [] });
 });
+
+test('默认话术要看闸门等的是哪个值', () => {
+  // 「总开关 = 1」被挡住，意思是它**关着**；说成「开着」正好相反。
+  // 人写了 say 就听人的，这只是没写时的兜底。
+  const rule = {
+    cfg: { enable: true, userData: { name: '餐厅_有人_开灯' } },
+    nodes: [
+      N('G0', 'varGet', { scope: 'global', id: 'ziDongHua', operator: '=', v1: 1 }, { output: ['G1.input'] }),
+      N('G1', 'varGet', { scope: 'global', id: 'huiKe', operator: '=', v1: 0 }, { output: ['A3.input'] }),
+      N('A3', 'deviceGet', { did: 'sa', dtype: 'int', operator: '<', v1: 300 }, {}),
+    ],
+  };
+
+  const [room] = deriveFloorplan({ '996': probe, '001': rule }, vars, {});
+
+  assert.equal(room.chain[0].say, '灯光自动化总开关是关的');
+  assert.equal(room.chain[1].say, '会客模式开着');
+});

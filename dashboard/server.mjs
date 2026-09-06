@@ -18,6 +18,8 @@ import { loadConfig, buildSkeleton, buildFloorplanSkeleton } from './lib/config.
 import { buildThresholdPatch, unexpectedChanges } from './lib/threshold.mjs';
 import { applyLayout, sanitizeLayout, layoutProblems } from './lib/layout.mjs';
 import { sanitizeHouses, pickHouse, houseFile, addHouse, removeHouse } from './lib/houses.mjs';
+import { sanitizeGroups, rebuildGroups, applyRoles, autoGroups } from './lib/groups.mjs';
+import { deriveRoles } from './lib/roles.mjs';
 import { deriveFloorplan, overlayFromConfig } from './lib/derive.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
@@ -217,14 +219,30 @@ const graphCache = makeCache({ ttlMs: 10 * 60_000, load: () => gw.graphs() });
 // 房间从规则图现推，配置只当「人写的覆盖层」（显示名、位置、话术、藏哪几个）。
 // 拉不到图（没登录、网关不通）就退回配置里存的那份 —— 页面不该因此空掉，
 // 只是那份可能已经过期。
-async function floorplanOf(cfg, snapshot) {
-  if (!cfg?.floorplan) return null;
-  try {
-    const graphs = await graphCache.get();
-    const rooms = deriveFloorplan(graphs, snapshot.variables?.global, overlayFromConfig(cfg));
-    if (rooms.length) return { ...cfg, floorplan: { ...cfg.floorplan, rooms } };
-  } catch { /* 拉不到就用存的 */ }
-  return cfg;
+async function viewConfig(cfg, snapshot) {
+  let graphs;
+  try { graphs = await graphCache.get(); } catch { return cfg; }   // 拉不到图就用存的那份
+
+  // **一户全新装上来、一个字的配置都没有时，整份现推。**
+  // 房间从开灯规则来，卡片从变量在图里的角色来 —— 装上打开就是分好组的看板，
+  // 不用先回终端生成配置。拉不到图才退回扁平只读（cfg 为 null → flatView）。
+  let out = cfg ?? { refreshSeconds: 10, floorplan: { title: '房间' }, groups: [] };
+
+  if (out.floorplan) {
+    const rooms = deriveFloorplan(graphs, snapshot.variables?.global, overlayFromConfig(out));
+    if (rooms.length) out = { ...out, floorplan: { ...out.floorplan, rooms } };
+  }
+
+  // 卡片的角色也从图里推：上下界、单位、脉冲目标（见 roles.mjs）。
+  // 一张分组都没有时按角色自动分一份 —— 新一户打开不该是「未归类 35 项」。
+  const roles = deriveRoles(graphs);
+  if (!out.groups?.length) out = { ...out, groups: autoGroups(roles, snapshot) };
+  return applyRoles(out, roles);
+}
+
+// 页面写分组时也要拿角色：挪进来的新卡片直接就是带 min/max 的数值卡。
+async function currentRoles() {
+  try { return deriveRoles(await graphCache.get()); } catch { return null; }
 }
 
 // ---------- --init-config ----------
@@ -280,7 +298,7 @@ const routes = {
     }
 
     const view = buildView(
-      applyLayout(await floorplanOf(config(), snapshot), loadLayout()),
+      applyLayout(await viewConfig(config(), snapshot), loadLayout()),
       snapshot,
     );
     return {
@@ -387,6 +405,26 @@ const routes = {
     const clean = sanitizeLayout(raw);
     writeFileSync(layoutFile(), JSON.stringify(clean, null, 2));
     return { ok: true, layout: clean };
+  },
+
+  // 分组：住户在页面上自己建分类、把「未归类」里的东西挪进去。
+  //
+  // **只收「哪几个 ref 归哪一组」**，不收卡片定义 —— 定义决定写入白名单的边界
+  // （开关认哪两个值、数值的 min/max），让页面送定义等于让它自己定边界。
+  //
+  // 写到住户机器上那份 dashboard.json（不是 .app 里打包的那份）。
+  // 第一次保存等于把包里的配置抄一份出来再改，包里那份始终不动。
+  async 'POST /api/groups'(req) {
+    const { groups } = await readBody(req);
+    const cfg = config();
+    if (!cfg) return { ok: false, error: '这户还没有语义地图 —— 先「生成房间地图」' };
+
+    const { groups: rebuilt, retired } = rebuildGroups(
+      sanitizeGroups(groups), cfg, await cache.get(), await currentRoles());
+    const next = { ...cfg, groups: rebuilt, ...(retired.length ? { retired } : {}) };
+
+    writeFileSync(houseFile(STATE_DIR, 'dashboard', houseId()), JSON.stringify(next, null, 2));
+    return { ok: true, groups: rebuilt.length };
   },
 
   // 背景图。存进 Application Support，页面用 /bg?t=… 取。
@@ -506,10 +544,25 @@ const routes = {
       return { ok: false, error: '一个房间都抠不出来 —— 这户的规则结构可能不一样，得手写配置' };
     }
 
-    const cfg = { refreshSeconds: 10, floorplan: { rooms: fp.rooms }, groups: [] };
+    // **合并，不是覆盖。** 早先这里直接写一份新的、groups 是空数组 ——
+    // 住户点一下「生成房间地图」，手工分好的「全屋模式」整组就没了，
+    // 十几个开关一起掉进「未归类」，而且没有任何提示。
+    // 生成的是新发现的房间，人写的那些（分组、话术、摆好的位置）一个都不许动。
+    const old = config() ?? {};
+    const known = new Map((old.floorplan?.rooms ?? []).map((r) => [r.rule ?? r.title, r]));
+    const rooms = fp.rooms.map((r) => known.get(r.rule ?? r.title) ?? r);
+    for (const [k, r] of known) if (!fp.rooms.some((n) => (n.rule ?? n.title) === k)) rooms.push(r);
+
+    const cfg = {
+      ...old,
+      refreshSeconds: old.refreshSeconds ?? 10,
+      floorplan: { ...old.floorplan, rooms },
+      groups: old.groups ?? [],
+    };
     writeFileSync(houseFile(STATE_DIR, 'dashboard', id), JSON.stringify(cfg, null, 2));
     cache.invalidate();
-    return { ok: true, rooms: fp.rooms.length, skipped: fp.skipped.map((x) => x.name) };
+    const added = fp.rooms.filter((r) => !known.has(r.rule ?? r.title)).length;
+    return { ok: true, rooms: rooms.length, added, skipped: fp.skipped.map((x) => x.name) };
   },
 
   // 切换房屋。语义地图、外观、网关地址三样一起跟着切 ——

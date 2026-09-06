@@ -203,3 +203,51 @@ test('没有规则的房间还是按名字认', () => {
 
   assert.equal(out.floorplan.rooms[0].x, 3);
 });
+
+// ---- 同组里有的摆过、有的没摆过 ----
+//
+// 真实来源：配置里后加了一张卡（会客模式），而 layout 是加它之前存的。
+// 前端的规则是「同组里只要有一张摆过，整组就切成绝对定位」——
+// 没摆过的那张于是落在 (0,0)，跟第一张叠在一起，两个标题糊成一团。
+
+test('同组里没摆过位置的卡片自动找空位，不叠在原点', () => {
+  const cfg = { groups: [{ title: '全屋模式', cards: [
+    { kind: 'toggle', title: '总开关', scope: 'global', id: 'ziDongHua', on: 1, off: 0 },
+    { kind: 'toggle', title: '会客模式', scope: 'global', id: 'huiKe', on: 1, off: 0 },
+  ] }] };
+
+  const out = applyLayout(cfg, { tiles: { 'global.ziDongHua': { x: 0, y: 0, w: 222, h: 45 } } });
+  const [a, b] = out.groups[0].cards;
+
+  assert.equal(typeof b.x, 'number');
+  assert.ok(!overlaps(a, b), `会客模式落在 (${b.x},${b.y})，和总开关叠住了`);
+});
+
+test('一整组都没摆过位置时不给位置 —— 那时候该走自动排版', () => {
+  const cfg = { groups: [{ title: '全屋模式', cards: [
+    { kind: 'toggle', title: '总开关', scope: 'global', id: 'ziDongHua', on: 1, off: 0 },
+  ] }] };
+
+  assert.equal(applyLayout(cfg, {}).groups[0].cards[0].x, undefined);
+});
+
+test('自动补的位置会绕开已经占住的格子', () => {
+  const cfg = { groups: [{ title: 'A', cards: [
+    { kind: 'readonly', title: '一', scope: 'global', id: 'a' },
+    { kind: 'readonly', title: '二', scope: 'global', id: 'b' },
+    { kind: 'readonly', title: '三', scope: 'global', id: 'c' },
+  ] }] };
+
+  const out = applyLayout(cfg, { tiles: {
+    'global.b': { x: 0, y: 0, w: 222, h: 45 },
+  } });
+
+  const [a, b, c] = out.groups[0].cards;
+  for (const t of [a, b, c]) assert.equal(typeof t.x, 'number', `「${t.title}」没拿到位置`);
+  assert.ok(!overlaps(a, b) && !overlaps(a, c) && !overlaps(b, c),
+    `三张叠了：${JSON.stringify([a, b, c].map((t) => [t.x, t.y]))}`);
+});
+
+function overlaps(p, q) {
+  return p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h;
+}

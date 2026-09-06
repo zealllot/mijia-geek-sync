@@ -44,8 +44,10 @@ export function deriveFloorplan(graphs, vars, overlay) {
       chain: r.chain.map((g) => ({
         ...g,
         title: vars?.[g.id]?.name ?? g.id,
-        // 话术可以覆盖；没写就退回机器话 —— 读得懂就行，只是不如手写的顺
-        say: o.say?.[g.id] ?? `${vars?.[g.id]?.name ?? g.id}开着`,
+        // 话术可以覆盖；没写就退回机器话 —— 读得懂就行，只是不如手写的顺。
+        // 兜底得看这道闸等的是哪个值：「总开关 = 1」被挡住是它**关着**，
+        // 一律说「开着」正好说反。
+        say: o.say?.[g.id] ?? sayOf(vars?.[g.id]?.name ?? g.id, g.equals),
       })),
       lux: r.lux,
     });
@@ -70,4 +72,8 @@ export function overlayFromConfig(cfg) {
     };
   }
   return { rooms, hide: cfg?.floorplan?.hide ?? [] };
+}
+
+function sayOf(name, equals) {
+  return equals === 1 ? `${name}是关的` : `${name}开着`;
 }
