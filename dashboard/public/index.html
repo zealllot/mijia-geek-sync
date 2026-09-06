@@ -371,12 +371,13 @@ function render(s) {
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer">开机自启
         <input type="checkbox" id="autostart" style="accent-color:var(--ok);width:14px;height:14px">
       </label>
+      <button class="mini" id="logout">退出登录</button>
       <button class="mini" id="quit">退出</button>
     </div>`;
 
   applyTheme(editing ? draft?.theme : s.layout?.theme);
   paintBackground(editing ? draft?.background : s.layout?.background);
-  wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireQuit(); wireSpare();
+  wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireLogout(); wireQuit(); wireSpare();
   wireEdit(); wireDrag(); wireSwap(); tick();
 }
 
@@ -658,6 +659,20 @@ function wireAutostart() {
     const r = await api('/api/autostart', { enabled: box.checked });
     box.disabled = false;
     if (r.ok) box.checked = r.enabled;
+  };
+}
+
+function wireLogout() {
+  const b = document.getElementById('logout');
+  if (!b) return;
+  b.onclick = async () => {
+    // 说清楚代价：退了要重新去米家 App 取码，不是随手能撤销的。
+    if (!confirm('退出登录之后，下次要重新去米家 App 取一次 6 位码。确定吗？')) return;
+    b.disabled = true;
+    const r = await api('/api/logout', {}).catch((e) => ({ ok: false, error: e.message }));
+    b.disabled = false;
+    if (!r.ok) return alert(r.error ?? '退出登录失败');
+    poll();   // 会话没了，下一轮就会落到登录页（地址还在）
   };
 }
 

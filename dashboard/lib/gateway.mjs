@@ -166,6 +166,12 @@ export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs 
       );
     },
 
+    // 结束这台网关的会话（停掉 per-host agent 并删掉会话条目）。
+    // 地址不动 —— 退的是登录，不是「忘掉这台网关」。
+    async logout() {
+      return callXgg(['logout'], { run, attempts: 1 });
+    },
+
     async status() {
       return callXgg(['status'], { run });
     },

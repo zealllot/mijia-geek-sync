@@ -384,6 +384,18 @@ const routes = {
     return { ok: true };
   },
 
+  // 退出登录 ≠ 退出程序。前者结束网关会话（下次要重新取码），
+  // 后者停掉服务。两个都要有：
+  //   - 地址填错了想换一台网关，得先把旧会话放掉
+  //   - 住户想收回看板的访问权，也得有个办法
+  // **地址保留** —— 退的是登录，不是忘掉这台网关，重登只用填 6 位码。
+  async 'POST /api/logout'() {
+    const r = await gw.logout().catch((e) => ({ ok: false, error: { message: e.message } }));
+    cache.invalidate();
+    if (r.ok === false) return { ok: false, error: r.error?.message ?? '退出登录失败' };
+    return { ok: true };
+  },
+
   // 脚本型 .app 在 Dock 上不一定收得到 Cmd-Q，所以页面上给一个明确的出口。
   async 'POST /api/quit'() {
     setTimeout(() => process.exit(0), 120);
