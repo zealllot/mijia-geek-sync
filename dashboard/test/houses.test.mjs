@@ -61,3 +61,55 @@ test('每户的配置和外观各存一份', () => {
 test('单户模式（没有 id）用不带后缀的文件名 —— 跟现在的包兼容', () => {
   assert.equal(houseFile('/state', 'dashboard', null), '/state/dashboard.json');
 });
+
+// ---- 新增 / 删除 ----
+import { newHouseId, addHouse, removeHouse } from '../lib/houses.mjs';
+
+test('id 自动生成，跟名字无关', () => {
+  // 名字是给人看的，id 是拼文件名的。分开之后：改名不动文件、
+  // 两户重名也没事、名字里带中文或斜杠也不会跑到路径里去。
+  const a = newHouseId([]);
+  assert.match(a, /^[A-Za-z0-9_-]{1,40}$/);
+});
+
+test('连着生成不会撞', () => {
+  const ids = [];
+  for (let i = 0; i < 50; i++) ids.push(newHouseId(ids.map((id) => ({ id }))));
+
+  assert.equal(new Set(ids).size, 50);
+});
+
+const two = [
+  { id: 'h1', name: '1302', fallback: '192.168.5.25' },
+  { id: 'h2', name: '1301', fallback: '192.168.5.33' },
+];
+
+test('新增一户：名字原样留着，id 是生成的', () => {
+  const out = addHouse(two, { name: '老王家 / 楼下', address: 'xiaomi-gateway-hub1-3' });
+
+  assert.equal(out.length, 3);
+  assert.equal(out[2].name, '老王家 / 楼下');
+  assert.match(out[2].id, /^[A-Za-z0-9_-]+$/);
+  assert.equal(out[2].mdns, 'xiaomi-gateway-hub1-3');
+});
+
+test('IP 存成 fallback，实例名存成 mdns', () => {
+  assert.equal(addHouse([], { name: 'a', address: '192.168.1.9' })[0].fallback, '192.168.1.9');
+  assert.equal(addHouse([], { name: 'b', address: 'gw-abc' })[0].mdns, 'gw-abc');
+});
+
+test('地址填不对时报错，不建一户连不上的', () => {
+  assert.throws(() => addHouse([], { name: 'a', address: '这是什么' }), /地址/);
+});
+
+test('名字是空的不给建', () => {
+  assert.throws(() => addHouse([], { name: '  ', address: '1.2.3.4' }), /名字/);
+});
+
+test('删一户', () => {
+  assert.deepEqual(removeHouse(two, 'h2').map((h) => h.id), ['h1']);
+});
+
+test('删不存在的那户时报错，不静默', () => {
+  assert.throws(() => removeHouse(two, '不存在'), /没有/);
+});

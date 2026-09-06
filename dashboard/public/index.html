@@ -100,6 +100,28 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 }
 .house:hover { border-color: var(--bright); }
 .house:disabled { opacity: .5; cursor: wait; }
+
+/* 管理房屋 */
+.sheet { position: fixed; inset: 0; z-index: 40; background: #000a; display: flex; align-items: center; justify-content: center; }
+.sheet .box {
+  background: var(--ground); border: 1px solid var(--line); border-radius: var(--radius);
+  width: min(560px, 92vw); max-height: 84vh; overflow: auto; padding: 22px 24px;
+}
+.sheet h2 { font: 400 17px/1 var(--sans); color: var(--ink-hi); margin: 0 0 18px; letter-spacing: .06em; }
+.sheet .hrow {
+  display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line-dim);
+}
+.sheet .hrow .n { flex-grow: 1; font-family: var(--sans); font-size: 14px; color: var(--ink); }
+.sheet .hrow .g { font-size: 10.5px; color: var(--faint); }
+.sheet .hrow .cur { font-size: 10px; letter-spacing: .1em; color: var(--ok); }
+.sheet .add { margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+.sheet .add input {
+  flex: 1 1 150px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--ink); font: inherit; font-size: 13px; padding: 9px 11px; outline: none;
+}
+.sheet .add input:focus { border-color: var(--bright); }
+.sheet .foot { margin-top: 20px; display: flex; gap: 10px; align-items: center; }
+.sheet .hint { font-family: var(--sans); font-size: 11.5px; color: var(--faint); line-height: 1.7; margin-top: 14px; }
 .led { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .led.ok     { background: var(--ok);     box-shadow: 0 0 7px #4ade9a88; }
 .led.bright { background: var(--bright); box-shadow: 0 0 7px #6b93b088; }
@@ -408,11 +430,44 @@ function placed(p) {
 }
 
 // 房屋切换器。服务端只在有两户以上时才带 houses 字段。
+// 一户或零户时不画下拉（一个只有一项的下拉是噪音），但**管理入口必须一直在** ——
+// 早先两者绑在一起，删到只剩一户就再也加不回来了。
 function renderHouses(s) {
-  if (!s.houses?.length) return '';
+  if (!s.houses) return '';
+  const manage = `<button class="house zh" id="manage" title="管理房屋">房屋…</button>`;
+  if (s.houses.length < 2) return manage;
   return `<select class="house zh" id="house">${
     s.houses.map((h) => `<option value="${esc(h.id)}"${h.id === s.house ? ' selected' : ''}>${esc(h.name)}</option>`).join('')
-  }</select>`;
+  }</select>${manage}`;
+}
+
+function renderSheet(s) {
+  const list = s.houses ?? [];
+  return `<div class="sheet" id="sheet"><div class="box">
+    <h2>管理房屋</h2>
+    ${list.length ? list.map((h) => `<div class="hrow">
+      <span class="n">${esc(h.name)}</span>
+      ${h.id === s.house ? '<span class="cur">当前</span>' : ''}
+      <span class="g">${esc(h.id)}</span>
+      <button class="btn-s" data-del="${esc(h.id)}">删除</button>
+    </div>`).join('') : '<div class="hint">还没有房屋。下面加一个。</div>'}
+
+    <div class="add">
+      <input id="hname" placeholder="房屋名字，比如 1302">
+      <input id="haddr" placeholder="IP 或 mDNS 实例名" spellcheck="false" autocapitalize="off">
+      <button class="btn-s go" id="hadd">新增</button>
+    </div>
+    <div class="hint">
+      名字随便起，只是给人看的。地址填米家 App 里那个 IP，或者中枢的 mDNS 实例名（换 IP 也不用改）。<br>
+      新加的房屋还没有房间地图 —— 切过去登录之后，回到这里点「生成房间地图」。
+    </div>
+
+    <div class="foot">
+      ${s.house ? '<button class="btn-s" id="hinit">生成房间地图</button>' : ''}
+      <span class="grow" style="flex-grow:1"></span>
+      <button class="btn-s" id="hclose">关闭</button>
+    </div>
+  </div></div>`;
 }
 
 function renderBand(hl) {
@@ -687,6 +742,9 @@ function wireAutostart() {
 }
 
 function wireHouses() {
+  const mg = document.getElementById('manage');
+  if (mg) mg.onclick = () => openSheet(state ?? {});
+
   const el = document.getElementById('house');
   if (!el) return;
   el.onchange = async () => {
@@ -697,6 +755,48 @@ function wireHouses() {
     // 换了一户 = 换了配置、外观、网关，选中的房间和展开状态都不再适用。
     picked = null; spareOpen = false;
     poll();
+  };
+}
+
+let sheetOpen = false;
+
+function openSheet(s) {
+  sheetOpen = true;
+  document.body.insertAdjacentHTML('beforeend', renderSheet(s));
+  const box = document.getElementById('sheet');
+  const close = () => { sheetOpen = false; box.remove(); };
+
+  box.onclick = (e) => { if (e.target === box) close(); };
+  document.getElementById('hclose').onclick = close;
+
+  document.getElementById('hadd').onclick = async () => {
+    const name = document.getElementById('hname').value;
+    const address = document.getElementById('haddr').value;
+    const r = await api('/api/houses/add', { name, address }).catch((e) => ({ ok: false, error: e.message }));
+    if (!r.ok) return alert(r.error ?? '新增失败');
+    close(); poll();
+  };
+
+  for (const b of box.querySelectorAll('[data-del]')) {
+    b.onclick = async () => {
+      const name = b.closest('.hrow').querySelector('.n').textContent;
+      // 说清楚代价：配置挪进 trash 是能找回来，但得去翻文件。
+      if (!confirm(`删掉「${name}」？\n\n它的房间地图和外观会挪进 trash/，不会直接删掉，但页面上找不回来。`)) return;
+      const r = await api('/api/houses/remove', { id: b.dataset.del }).catch((e) => ({ ok: false, error: e.message }));
+      if (!r.ok) return alert(r.error ?? '删除失败');
+      close(); poll();
+    };
+  }
+
+  const init = document.getElementById('hinit');
+  if (init) init.onclick = async () => {
+    init.disabled = true; init.textContent = '生成中…';
+    const r = await api('/api/houses/init', {}).catch((e) => ({ ok: false, error: e.message }));
+    init.disabled = false; init.textContent = '生成房间地图';
+    if (!r.ok) return alert(r.error ?? '生成失败');
+    alert(`抠出 ${r.rooms} 个房间。\n\n位置是竖排的，进编辑模式拖成真格局。` +
+      (r.skipped?.length ? `\n\n跳过（看着像场景规则）：${r.skipped.join('、')}` : ''));
+    close(); poll();
   };
 }
 
@@ -960,7 +1060,7 @@ setInterval(tick, 1000);
 async function poll() {
   clearTimeout(timer);
   // 编辑期间不拉数据 —— 每 10 秒重画一次会把拖到一半的东西冲掉。
-  if (editing) { timer = setTimeout(poll, 10000); return; }
+  if (editing || sheetOpen) { timer = setTimeout(poll, 10000); return; }
   try { render(await api('/api/state')); } catch (e) { renderTrouble(e.message); }
   timer = setTimeout(poll, 10000);
 }

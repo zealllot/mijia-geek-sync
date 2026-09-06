@@ -41,3 +41,36 @@ export function pickHouse(houses, wantedId) {
 export function houseFile(dir, kind, id) {
   return join(dir, id ? `${kind}.${id}.json` : `${kind}.json`);
 }
+
+import { normalizeAddress } from './address.mjs';
+
+// id 自动生成，跟名字无关。
+//
+// 名字是给人看的，id 是拼文件名的（dashboard.<id>.json）。分开之后：
+// 改名不动文件、两户重名也没事、名字里带中文或斜杠也不会跑到路径里去。
+export function newHouseId(existing) {
+  const taken = new Set((existing ?? []).map((h) => h.id));
+  for (let i = 0; i < 1000; i++) {
+    const id = 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    if (!taken.has(id)) return id;
+  }
+  throw new Error('生成不出没被占用的 id');
+}
+
+export function addHouse(houses, { name, address }) {
+  const label = String(name ?? '').trim();
+  if (!label) throw new Error('房屋名字不能是空的');
+
+  // 地址在这儿就校验掉 —— 建一户连不上的等于把问题推到以后。
+  const normalized = normalizeAddress(address);
+  const gateway = normalized.startsWith('mdns://')
+    ? { mdns: normalized.slice(7) }
+    : { fallback: normalized.replace(/^https?:\/\//, '') };
+
+  return [...houses, { id: newHouseId(houses), name: label, ...gateway }];
+}
+
+export function removeHouse(houses, id) {
+  if (!houses.some((h) => h.id === id)) throw new Error(`没有 id 是「${id}」的房屋`);
+  return houses.filter((h) => h.id !== id);
+}

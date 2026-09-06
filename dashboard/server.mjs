@@ -5,7 +5,7 @@
 //
 // 只绑 127.0.0.1。住户家 WiFi 上的其他设备不该能翻他家的模式开关。
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, mkdirSync, appendFileSync, existsSync, chmodSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, appendFileSync, existsSync, chmodSync, renameSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,7 @@ import { buildView, assertWritable } from './lib/state.mjs';
 import { loadConfig, buildSkeleton, buildFloorplanSkeleton, applyLiveThresholds } from './lib/config.mjs';
 import { buildThresholdPatch, unexpectedChanges } from './lib/threshold.mjs';
 import { applyLayout, sanitizeLayout, layoutProblems } from './lib/layout.mjs';
-import { sanitizeHouses, pickHouse, houseFile } from './lib/houses.mjs';
+import { sanitizeHouses, pickHouse, houseFile, addHouse, removeHouse } from './lib/houses.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
@@ -79,6 +79,14 @@ function allHouses() {
 let wantedHouse = null;
 try { wantedHouse = readFileSync(CURRENT_FILE, 'utf8').trim() || null; } catch { /* 还没选过 */ }
 
+const HOUSES_FILE = join(STATE_DIR, 'houses.json');
+
+// 写清单时从**当前生效的那份**出发（可能来自包里），再整份写到 state ——
+// 不然第一次新增会把包里带的几户整个盖掉。
+function saveHouses(list) {
+  writeFileSync(HOUSES_FILE, JSON.stringify(list, null, 2));
+}
+
 function currentHouse() {
   return pickHouse(allHouses(), wantedHouse);
 }
@@ -128,10 +136,10 @@ function suggestion() {
 
 // 只有一户（或零户）时不带房屋字段 —— 前端据此决定要不要画切换器。
 // 单户还画一个只有一项的下拉，纯属噪音。
+// **清单始终带出去**，哪怕零户或一户 —— 早先只在两户以上才带，
+// 结果删到只剩一户时管理入口自己消失了，再也加不回来。
 function houseInfo() {
-  const list = allHouses();
-  if (list.length < 2) return {};
-  return { houses: list.map((h) => ({ id: h.id, name: h.name })), house: houseId() };
+  return { houses: allHouses().map((h) => ({ id: h.id, name: h.name })), house: houseId() };
 }
 
 // 钉住时不带 address 字段 —— 前端据此决定要不要画地址输入框。
@@ -434,6 +442,61 @@ const routes = {
         `快照在 ${join(STATE_DIR, 'snapshots')}，用 mgs pull 对一下。` };
     }
     return { ok: true };
+  },
+
+  // 新增房屋。名字随便填（中文、斜杠都行），id 是生成的 ——
+  // 名字给人看，id 拼文件名，分开之后改名不动文件。
+  //
+  // 新加的一户还没有语义地图，打开是扁平只读；登录之后可以点「生成房间地图」。
+  async 'POST /api/houses/add'(req) {
+    const { name, address } = await readBody(req);
+    let list;
+    try { list = addHouse(allHouses(), { name, address }); }
+    catch (e) { return { ok: false, error: e.message }; }
+
+    saveHouses(list);
+    return { ok: true, houses: list.map((h) => ({ id: h.id, name: h.name })) };
+  },
+
+  // 删除房屋。配置和外观**挪进 trash/**，不直接删 ——
+  // 手工调过的语义地图（房间、闸门链、话术）没了是找不回来的。
+  async 'POST /api/houses/remove'(req) {
+    const { id } = await readBody(req);
+    let list;
+    try { list = removeHouse(allHouses(), id); }
+    catch (e) { return { ok: false, error: e.message }; }
+
+    const trash = join(STATE_DIR, 'trash');
+    mkdirSync(trash, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    for (const kind of ['dashboard', 'layout', 'address']) {
+      const from = houseFile(STATE_DIR, kind, id);
+      if (existsSync(from)) renameSync(from, join(trash, `${kind}.${id}.${stamp}.json`));
+    }
+
+    saveHouses(list);
+    if (wantedHouse === id) { wantedHouse = null; await rebindGateway(); cache.invalidate(); graphCache.invalidate(); }
+    return { ok: true, houses: list.map((h) => ({ id: h.id, name: h.name })) };
+  },
+
+  // 给当前这户生成房间地图：拉规则图、抠闸门链和阈值，写成 dashboard.<id>.json。
+  // 这是原来只能在命令行做的 --init-config，搬到页面上 ——
+  // 新加一户之后不用再回到终端。
+  async 'POST /api/houses/init'() {
+    if (!currentBase) return { ok: false, error: '还没连上这户的中枢' };
+    const id = houseId();
+    if (!id) return { ok: false, error: '单户模式下不用生成，配置在包里' };
+
+    const snap = await cache.get();
+    const fp = buildFloorplanSkeleton(await gw.graphs(), snap);
+    if (!fp.rooms.length) {
+      return { ok: false, error: '一个房间都抠不出来 —— 这户的规则结构可能不一样，得手写配置' };
+    }
+
+    const cfg = { refreshSeconds: 10, floorplan: { rooms: fp.rooms }, groups: [] };
+    writeFileSync(houseFile(STATE_DIR, 'dashboard', id), JSON.stringify(cfg, null, 2));
+    cache.invalidate();
+    return { ok: true, rooms: fp.rooms.length, skipped: fp.skipped.map((x) => x.name) };
   },
 
   // 切换房屋。语义地图、外观、网关地址三样一起跟着切 ——
