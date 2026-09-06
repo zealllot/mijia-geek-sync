@@ -180,37 +180,6 @@ test('min 比 max 大是配置写反了，要挡住', () => {
   assert.throws(() => loadConfig(p2), /写反/);
 });
 
-import { applyLiveThresholds } from '../lib/config.mjs';
-
-const fpCfg = {
-  floorplan: { rooms: [
-    { title: '客厅', rule: '20260822160', lux: { global: 'luxQuanJu', zoneThreshold: 1000, zoneThresholdNode: 'A3b' } },
-    { title: '主卫', rule: '20260822120', lux: { global: 'luxQuanJu', zoneThreshold: 700, zoneThresholdNode: 'A3b' } },
-  ] },
-  groups: [],
-};
-
-test('阈值以图里的实时值为准，配置里的只是兜底', () => {
-  // 住户在页面上改完，配置文件里那个数就旧了 —— 用旧值判「够亮了」会判错。
-  const live = { '20260822160.A3b': 850 };
-
-  const out = applyLiveThresholds(fpCfg, live);
-
-  assert.equal(out.floorplan.rooms[0].lux.zoneThreshold, 850);
-  assert.equal(out.floorplan.rooms[1].lux.zoneThreshold, 700);   // 没实时值就用配置里的
-});
-
-test('读不到图时原样返回，不是清空', () => {
-  // 没登录的时候读不到图。那时候用配置里的值，好过什么都不显示。
-  assert.equal(applyLiveThresholds(fpCfg, null), fpCfg);
-});
-
-test('不改原配置对象', () => {
-  applyLiveThresholds(fpCfg, { '20260822160.A3b': 850 });
-
-  assert.equal(fpCfg.floorplan.rooms[0].lux.zoneThreshold, 1000);
-});
-
 test('applyWith 缺字段时抛错并指出是哪张卡', () => {
   const p2 = join(dir, 'badapply.json');
   writeFileSync(p2, JSON.stringify({ groups: [{ title: '全屋', cards: [

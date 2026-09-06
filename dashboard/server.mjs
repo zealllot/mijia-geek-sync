@@ -14,10 +14,11 @@ import { homedir } from 'node:os';
 import { makeGateway } from './lib/gateway.mjs';
 import { makeCache } from './lib/cache.mjs';
 import { buildView, assertWritable } from './lib/state.mjs';
-import { loadConfig, buildSkeleton, buildFloorplanSkeleton, applyLiveThresholds } from './lib/config.mjs';
+import { loadConfig, buildSkeleton, buildFloorplanSkeleton } from './lib/config.mjs';
 import { buildThresholdPatch, unexpectedChanges } from './lib/threshold.mjs';
 import { applyLayout, sanitizeLayout, layoutProblems } from './lib/layout.mjs';
 import { sanitizeHouses, pickHouse, houseFile, addHouse, removeHouse } from './lib/houses.mjs';
+import { deriveFloorplan, overlayFromConfig } from './lib/derive.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
@@ -181,12 +182,22 @@ const gw = makeGateway({
 // 启动时先按上次的地址试一把 —— agent 进程要是还活着，住户不用重新登录。
 // 解析不出来不是错误，只是意味着登录页要让他填。
 // 启动时、以及每次切换房屋后都要重算 —— 每户的网关不一样。
+//
+// 按顺序试：住户自己填过的 → 房屋声明的 mDNS 名 → 房屋声明的 IP。
+// **fallback 必须真的被试到** —— mDNS 解析不了是常事（换了网段、
+// 路由器屏蔽 mDNS），那正是 fallback 存在的意义。早先只试第一个就放弃，
+// 于是页面显示登录屏、地址栏里填着一个解析不出来的实例名，IP 从没被用上。
 async function rebindGateway() {
   if (process.env.MGS_DASH_BASE_URL) { currentBase = process.env.MGS_DASH_BASE_URL; return; }
   lastTried = null;
-  const want = suggestion();
-  if (!want) { currentBase = null; return; }
-  try { currentBase = await resolveToBase(normalizeAddress(want)); } catch { currentBase = null; }
+
+  const h = currentHouse();
+  const tries = [savedAddress(), h?.mdns, h?.fallback].filter(Boolean);
+
+  for (const want of tries) {
+    try { currentBase = await resolveToBase(normalizeAddress(want)); return; } catch { /* 试下一个 */ }
+  }
+  currentBase = null;
 }
 
 await rebindGateway();
@@ -198,26 +209,22 @@ function config() {
 
 const cache = makeCache({ ttlMs: 10_000, load: () => gw.snapshot() });
 
-// 规则图单独缓存：阈值写在图里，但它是配置、几乎不变，所以 5 分钟拉一次就够。
-// 只拉 floorplan 里用到的那几条，不是全部三十几条。
-const graphCache = makeCache({
-  ttlMs: 5 * 60_000,
-  load: () => gw.graphsFor([...new Set((config()?.floorplan?.rooms ?? []).map((r) => r.rule).filter(Boolean))]),
-});
+// 规则图缓存。房间是从图里**现推**的（见 lib/derive.mjs），所以：
+//   - 要拉**全部**规则，不能只拉配置里提到的 —— 不然新建的区永远发现不了
+//   - 规则结构几乎不变，10 分钟拉一次够了
+const graphCache = makeCache({ ttlMs: 10 * 60_000, load: () => gw.graphs() });
 
-// 图里所有节点的 v1，键是 `<规则>.<节点>`。读不到就返回 null（没登录时会这样），
-// 那时用配置里的兜底值。
-async function liveThresholds() {
-  const rooms = config()?.floorplan?.rooms ?? [];
-  if (!rooms.some((r) => r.lux?.zoneThresholdNode)) return null;
+// 房间从规则图现推，配置只当「人写的覆盖层」（显示名、位置、话术、藏哪几个）。
+// 拉不到图（没登录、网关不通）就退回配置里存的那份 —— 页面不该因此空掉，
+// 只是那份可能已经过期。
+async function floorplanOf(cfg, snapshot) {
+  if (!cfg?.floorplan) return null;
   try {
     const graphs = await graphCache.get();
-    const out = {};
-    for (const [ruleId, g] of Object.entries(graphs)) {
-      for (const n of g.nodes ?? []) if (n.props?.v1 !== undefined) out[`${ruleId}.${n.id}`] = n.props.v1;
-    }
-    return out;
-  } catch { return null; }
+    const rooms = deriveFloorplan(graphs, snapshot.variables?.global, overlayFromConfig(cfg));
+    if (rooms.length) return { ...cfg, floorplan: { ...cfg.floorplan, rooms } };
+  } catch { /* 拉不到就用存的 */ }
+  return cfg;
 }
 
 // ---------- --init-config ----------
@@ -273,7 +280,7 @@ const routes = {
     }
 
     const view = buildView(
-      applyLayout(applyLiveThresholds(config(), await liveThresholds()), loadLayout()),
+      applyLayout(await floorplanOf(config(), snapshot), loadLayout()),
       snapshot,
     );
     return {

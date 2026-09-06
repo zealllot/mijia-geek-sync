@@ -148,22 +148,3 @@ export function buildFloorplanSkeleton(graphs, snapshot) {
   return { columns: ['186px', '296px'], rows: rooms.map(() => '110px'), rooms, skipped };
 }
 
-// 阈值以规则图里的实时值为准，配置里的那个只是兜底。
-//
-// 住户在页面上改完，配置文件里那个数就旧了 —— 用旧值去判「够亮了」会判错，
-// 而那正是看板存在的理由。读不到图（没登录）就原样用配置里的。
-export function applyLiveThresholds(config, live) {
-  if (!config?.floorplan || !live) return config;
-
-  return {
-    ...config,
-    floorplan: {
-      ...config.floorplan,
-      rooms: config.floorplan.rooms.map((r) => {
-        if (!r.lux?.zoneThresholdNode) return r;
-        const v = live[`${r.rule}.${r.lux.zoneThresholdNode}`];
-        return v === undefined ? r : { ...r, lux: { ...r.lux, zoneThreshold: v } };
-      }),
-    },
-  };
-}
