@@ -2,7 +2,10 @@
 #
 # 把看板打包成一个自带 Node 运行时的 macOS .app，给住户双击用。
 #
-#   tools/build-app.sh --arch arm64 --config data/1302/dashboard.json
+#   单户：tools/build-app.sh --arch arm64 --config data/1302/dashboard.json
+#   多户：tools/build-app.sh --arch arm64 --houses houses.json \
+#           --house-config 1302:data/1302/dashboard.json \
+#           --house-config 1301:data/1301/dashboard.json
 #
 # 为什么要自带 Node：xgg 硬要求 Node ≥ 20.11，而 macOS 从 12.3 起不再自带 python3，
 # 也从来不自带 node。住户那台机器上大概率什么都没有 —— 「双击就能用」就得自带。
@@ -22,13 +25,16 @@ BUNDLE_ID="com.zealllot.mijia-dashboard"
 
 die() { echo "$*" >&2; exit 1; }
 
-ARCH="" MDNS="" FALLBACK="" CONFIG="" OUT="$ROOT/dist"
+ARCH="" MDNS="" FALLBACK="" CONFIG="" HOUSES="" OUT="$ROOT/dist"
+HOUSE_CONFIGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --arch)     ARCH="${2:?}"; shift ;;
     --mdns)     MDNS="${2:?}"; shift ;;
     --fallback) FALLBACK="${2:?}"; shift ;;
     --config)   CONFIG="${2:?}"; shift ;;
+    --houses)   HOUSES="${2:?}"; shift ;;
+    --house-config) HOUSE_CONFIGS+=("${2:?}"); shift ;;
     --out)      OUT="${2:?}"; shift ;;
     *) die "不认识的参数: $1" ;;
   esac
@@ -94,6 +100,36 @@ print(json.dumps({k: v for k, v in (('mdns', mdns), ('fallback', fallback)) if v
 PY
 fi
 
+# 多户：houses.json 列出有哪几户和各自的网关，每户的语义地图单独一份。
+# 给了 --houses 就不用 --mdns/--fallback —— 地址写在 houses.json 里。
+if [ -n "$HOUSES" ]; then
+  [ -f "$HOUSES" ] || die "找不到 ${HOUSES}"
+  python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$HOUSES" || die "${HOUSES} 不是合法的 JSON"
+  mkdir -p "$APP/Contents/Resources/app/config"
+  cp "$HOUSES" "$APP/Contents/Resources/app/config/houses.json"
+  echo "  房屋: $(python3 -c "
+import json,sys
+print(', '.join(h.get('name', h['id']) for h in json.load(open(sys.argv[1]))))" "$HOUSES")"
+
+  for hc in ${HOUSE_CONFIGS[@]+"${HOUSE_CONFIGS[@]}"}; do
+    id="${hc%%:*}"; f="${hc#*:}"
+    [ -f "$f" ] || die "找不到 ${f}"
+    python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" || die "${f} 不是合法的 JSON"
+    cp "$f" "$APP/Contents/Resources/app/config/dashboard.${id}.json"
+    echo "    ${id} ← $(basename "$f")"
+  done
+
+  # 哪户没给配置，打开那户就是扁平只读 —— 说出来，别让人以为都装好了
+  python3 - "$HOUSES" "$APP/Contents/Resources/app/config" <<'PYHC'
+import json, os, sys
+houses, cfgdir = json.load(open(sys.argv[1])), sys.argv[2]
+miss = [h.get('name', h['id']) for h in houses
+        if not os.path.exists(os.path.join(cfgdir, f"dashboard.{h['id']}.json"))]
+if miss:
+    print(f"  !! 这几户没给配置，打开会是扁平只读：{', '.join(miss)}", file=sys.stderr)
+PYHC
+fi
+
 # 语义地图。不给就是扁平只读模式 —— 能装能看，但没有房间平面图、
 # 没有闸门链、没有「为什么不亮」那句结论，也什么都改不了。
 if [ -n "$CONFIG" ]; then
@@ -108,8 +144,8 @@ d=json.load(open(sys.argv[1]))
 r=len((d.get('floorplan') or {}).get('rooms') or [])
 g=sum(len(x.get('cards',[])) for x in d.get('groups',[]))
 print(f'{r} 个房间、{g} 张卡片')" "$CONFIG")"
-else
-  echo "  !! 没给 --config —— 住户打开会是扁平只读模式（没有房间图、没有结论、不能改）" >&2
+elif [ -z "$HOUSES" ]; then
+  echo "  !! 没给 --config 也没给 --houses —— 住户打开会是扁平只读模式（没有房间图、没有结论、不能改）" >&2
 fi
 
 cat > "$APP/Contents/MacOS/launcher" <<'LAUNCHER'

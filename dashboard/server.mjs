@@ -17,6 +17,7 @@ import { buildView, assertWritable } from './lib/state.mjs';
 import { loadConfig, buildSkeleton, buildFloorplanSkeleton, applyLiveThresholds } from './lib/config.mjs';
 import { buildThresholdPatch, unexpectedChanges } from './lib/threshold.mjs';
 import { applyLayout, sanitizeLayout, layoutProblems } from './lib/layout.mjs';
+import { sanitizeHouses, pickHouse, houseFile } from './lib/houses.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
@@ -29,9 +30,13 @@ const STATE_DIR = process.env.MGS_DASH_STATE_DIR
 // **每次现算，不在启动时定死** —— 不然把新配置丢进 Application Support 之后
 // 不重启就不认，人会以为「放了没用」。
 function configPath() {
-  return process.env.MGS_DASH_CONFIG
-    || [join(STATE_DIR, 'dashboard.json'), join(HERE, 'config', 'dashboard.json')].find((p) => existsSync(p))
-    || join(STATE_DIR, 'dashboard.json');
+  if (process.env.MGS_DASH_CONFIG) return process.env.MGS_DASH_CONFIG;
+  const id = houseId();
+  const tries = [
+    houseFile(STATE_DIR, 'dashboard', id),
+    houseFile(join(HERE, 'config'), 'dashboard', id),
+  ];
+  return tries.find((p) => existsSync(p)) ?? tries[0];
 }
 const PORT = Number(process.env.MGS_DASH_PORT || 7391);
 
@@ -56,14 +61,42 @@ const TOKEN = loadToken();
 // 打包时写死一个意味着地址一变，住户就只能等我重新打包。
 //
 // 三层：住户上次**登录成功**用的 → .app 里打包时写死的默认 → 空（让他自己填）。
-const LAYOUT_FILE = join(STATE_DIR, 'layout.json');
+// ---------- 房屋 ----------
+//
+// houses.json 列出有哪几户；每户的语义地图和外观各存一份
+// （dashboard.<id>.json / layout.<id>.json）。
+// 没有 houses.json 就是单户模式，文件名不带后缀 —— 跟已经发出去的包兼容。
+const CURRENT_FILE = join(STATE_DIR, 'current-house');
+
+function allHouses() {
+  for (const p of [join(STATE_DIR, 'houses.json'), join(HERE, 'config', 'houses.json')]) {
+    if (!existsSync(p)) continue;
+    try { return sanitizeHouses(JSON.parse(readFileSync(p, 'utf8'))); } catch { /* 坏了就当没有 */ }
+  }
+  return [];
+}
+
+let wantedHouse = null;
+try { wantedHouse = readFileSync(CURRENT_FILE, 'utf8').trim() || null; } catch { /* 还没选过 */ }
+
+function currentHouse() {
+  return pickHouse(allHouses(), wantedHouse);
+}
+
+// 单户模式下 id 是 null，文件名就退回不带后缀的那套。
+function houseId() {
+  return currentHouse()?.id ?? null;
+}
+
+const LAYOUT_FILE_SINGLE = join(STATE_DIR, 'layout.json');
+function layoutFile() { return houseFile(STATE_DIR, 'layout', houseId()); }
 
 // 外观（位置、背景）跟语义配置分开存 —— 见 lib/layout.mjs。
 function loadLayout() {
-  try { return sanitizeLayout(JSON.parse(readFileSync(LAYOUT_FILE, 'utf8'))); } catch { return {}; }
+  try { return sanitizeLayout(JSON.parse(readFileSync(layoutFile(), 'utf8'))); } catch { return {}; }
 }
 
-const ADDRESS_FILE = join(STATE_DIR, 'address.json');
+function addressFile() { return houseFile(STATE_DIR, 'address', houseId()); }
 
 // 地址被环境变量钉住 = `mgs serve` 那条路径：地址是 common.sh 解析好传进来的，
 // 登录页不该再问一遍。.app 那边没有这个变量，地址就归住户填。
@@ -72,11 +105,14 @@ let lastTried = null;   // 住户这次填的，即使登录失败也留着，�
 let currentBase = null; // 已经解析成 http:// 的那个
 
 function savedAddress() {
-  try { return JSON.parse(readFileSync(ADDRESS_FILE, 'utf8')).input || null; } catch { return null; }
+  try { return JSON.parse(readFileSync(addressFile(), 'utf8')).input || null; } catch { return null; }
 }
 
 // 打包时写死的默认。整个文件缺失是正常的 —— 住户自己填就行。
 function bundledDefault() {
+  const h = currentHouse();
+  if (h) return h.mdns || h.fallback || null;   // 多户：地址写在 houses.json 里
+
   const p = join(HERE, 'config', 'gateway.json');
   if (!existsSync(p)) return null;
   try {
@@ -88,6 +124,14 @@ function bundledDefault() {
 // 登录页该预填什么。
 function suggestion() {
   return lastTried ?? savedAddress() ?? bundledDefault() ?? '';
+}
+
+// 只有一户（或零户）时不带房屋字段 —— 前端据此决定要不要画切换器。
+// 单户还画一个只有一项的下拉，纯属噪音。
+function houseInfo() {
+  const list = allHouses();
+  if (list.length < 2) return {};
+  return { houses: list.map((h) => ({ id: h.id, name: h.name })), house: houseId() };
 }
 
 // 钉住时不带 address 字段 —— 前端据此决定要不要画地址输入框。
@@ -122,11 +166,16 @@ const gw = makeGateway({
 
 // 启动时先按上次的地址试一把 —— agent 进程要是还活着，住户不用重新登录。
 // 解析不出来不是错误，只是意味着登录页要让他填。
-if (process.env.MGS_DASH_BASE_URL) {
-  currentBase = process.env.MGS_DASH_BASE_URL;
-} else if (suggestion()) {
-  try { currentBase = await resolveToBase(normalizeAddress(suggestion())); } catch { currentBase = null; }
+// 启动时、以及每次切换房屋后都要重算 —— 每户的网关不一样。
+async function rebindGateway() {
+  if (process.env.MGS_DASH_BASE_URL) { currentBase = process.env.MGS_DASH_BASE_URL; return; }
+  lastTried = null;
+  const want = suggestion();
+  if (!want) { currentBase = null; return; }
+  try { currentBase = await resolveToBase(normalizeAddress(want)); } catch { currentBase = null; }
 }
+
+await rebindGateway();
 
 // 语义地图每次读盘：文件小，而且这样改完配置刷新页面就生效，不用重启。
 function config() {
@@ -198,22 +247,25 @@ async function readBody(req, maxBytes = 64 * 1024) {
 const routes = {
   async 'GET /api/state'() {
     // 还没有地址：这不是故障，是第一次用（或者 .app 没打包默认地址）。
-    if (!currentBase) return { ok: false, loggedIn: false, ...askAddress() };
+    if (!currentBase) return { ok: false, loggedIn: false, ...askAddress(), ...houseInfo() };
 
     let snapshot;
     try {
       snapshot = await cache.get();
     } catch (e) {
       // 会话过期是常态不是异常 —— 页面要把它当首屏，不是报错。
-      if (e.code === 'AUTH_REQUIRED') return { ok: false, loggedIn: false, ...askAddress() };
-      return { ok: false, loggedIn: null, error: e.message, ...askAddress() };
+      if (e.code === 'AUTH_REQUIRED') return { ok: false, loggedIn: false, ...askAddress(), ...houseInfo() };
+      return { ok: false, loggedIn: null, error: e.message, ...askAddress(), ...houseInfo() };
     }
 
     const view = buildView(
       applyLayout(applyLiveThresholds(config(), await liveThresholds()), loadLayout()),
       snapshot,
     );
-    return { ok: true, loggedIn: true, ...view, layout: loadLayout(), gatewayErrors: snapshot.errors };
+    return {
+      ok: true, loggedIn: true, ...view,
+      layout: loadLayout(), gatewayErrors: snapshot.errors, ...houseInfo(),
+    };
   },
 
   async 'POST /api/login'(req) {
@@ -247,7 +299,7 @@ const routes = {
     }
 
     // 只有登录成功才落盘，而且存住户填的原文（可能是 mDNS 实例名），不是解析后的 IP。
-    writeFileSync(ADDRESS_FILE, JSON.stringify({ input, base }, null, 2), { mode: 0o600 });
+    writeFileSync(addressFile(), JSON.stringify({ input, base }, null, 2), { mode: 0o600 });
     lastTried = null;
     cache.invalidate();
     return { ok: true };
@@ -312,7 +364,7 @@ const routes = {
     if (bad.length) return { ok: false, error: bad.join('；') };
 
     const clean = sanitizeLayout(raw);
-    writeFileSync(LAYOUT_FILE, JSON.stringify(clean, null, 2));
+    writeFileSync(layoutFile(), JSON.stringify(clean, null, 2));
     return { ok: true, layout: clean };
   },
 
@@ -382,6 +434,24 @@ const routes = {
         `快照在 ${join(STATE_DIR, 'snapshots')}，用 mgs pull 对一下。` };
     }
     return { ok: true };
+  },
+
+  // 切换房屋。语义地图、外观、网关地址三样一起跟着切 ——
+  // 两户的房间、闸门链、平面图位置都不一样。
+  //
+  // 会话不用管：xgg 的会话按网关分条存，切过去登录过就直接能用，
+  // 没登录过就落到登录页。
+  async 'POST /api/house'(req) {
+    const { id } = await readBody(req);
+    const list = allHouses();
+    if (!list.some((h) => h.id === id)) return { ok: false, error: `没有叫「${id}」的房屋` };
+
+    wantedHouse = id;
+    writeFileSync(CURRENT_FILE, id);
+    await rebindGateway();
+    cache.invalidate();
+    graphCache.invalidate();
+    return { ok: true, house: id };
   },
 
   // 退出登录 ≠ 退出程序。前者结束网关会话（下次要重新取码），

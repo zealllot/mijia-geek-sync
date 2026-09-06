@@ -227,6 +227,35 @@ IP 由 DHCP 分配，会变。写死一个意味着地址一变，住户就只�
 也收 mDNS 实例名（比 IP 耐用，换 IP 不用改）。
 登录失败不落盘，但页面上留着刚填的，好让人改错字。
 
+### 多户：切换房屋
+
+一台机器可以管几户。**一户 = 一个网关 + 一份语义地图 + 一套外观**，三样一起切 ——
+两户的房间、闸门链、平面图位置都不一样。
+
+```json
+// houses.json
+[
+  { "id": "1302", "name": "1302",      "mdns": "xiaomi-gateway-hub1",   "fallback": "192.168.5.25" },
+  { "id": "1301", "name": "1301 楼下", "mdns": "xiaomi-gateway-hub1-2", "fallback": "192.168.5.33" }
+]
+```
+
+每户的语义地图和外观各存一份：`dashboard.<id>.json` / `layout.<id>.json` /
+`address.<id>.json`。**没有 `houses.json` 就是单户模式**，文件名不带后缀 ——
+跟已经发出去的包兼容。
+
+```bash
+tools/build-app.sh --arch arm64 --houses houses.json \
+  --house-config 1302:data/1302/dashboard.json \
+  --house-config 1301:data/1301/dashboard.json
+```
+
+**会话不用管。** xgg 的会话按网关分条存，所以切过去登录过就直接能用、没登录过就
+落到登录页，两户互不影响。登录页和「连不上」那一屏也带切换器 ——
+不然某一户连不上就卡死在那户了。
+
+`id` 会被拼进文件名，所以只收 `[A-Za-z0-9_-]`：不挡的话等于让配置指定读写哪个文件。
+
 ### 退出登录 ≠ 退出程序
 
 页面底部两个按钮是两件事：

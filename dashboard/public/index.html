@@ -90,6 +90,16 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .bar.bot { border-top: 1px solid var(--line); font-size: 9.5px; color: var(--faint); gap: 20px; }
 .bar .grow { flex-grow: 1; }
 .bar .sep { color: color-mix(in srgb, var(--ink) 20%, transparent); }
+
+/* 切换房屋。只有一户时不画 —— 一个只有一项的下拉是纯噪音。 */
+.house {
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--ink); font: inherit; font-size: 11px; letter-spacing: .12em;
+  padding: 5px 9px; cursor: pointer;
+}
+.house:hover { border-color: var(--bright); }
+.house:disabled { opacity: .5; cursor: wait; }
 .led { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .led.ok     { background: var(--ok);     box-shadow: 0 0 7px #4ade9a88; }
 .led.bright { background: var(--bright); box-shadow: 0 0 7px #6b93b088; }
@@ -323,8 +333,8 @@ function currentTheme() {
 const LED = { clear: 'ok', bright: 'bright', blocked: 'alert', unconfigured: 'dead', unknown: 'alert' };
 
 function render(s) {
-  if (s.loggedIn === false) return renderGate(s.address);
-  if (!s.ok) return renderTrouble(s.error, s.address);
+  if (s.loggedIn === false) return renderGate(s.address, null, s);
+  if (!s.ok) return renderTrouble(s.error, s.address, s);
   state = s; lastFetch = Date.now();
 
   const fp = s.floorplan;
@@ -340,6 +350,7 @@ function render(s) {
     <div class="bar top">
       <span class="led ${hl && hl.state === 'blocked' ? 'alert' : 'ok'}"></span>
       <span class="zh" style="letter-spacing:.14em;color:color-mix(in srgb, var(--ink) 72%, transparent)">模式看板</span>
+      ${renderHouses(s)}
       <span class="grow"></span>
       <button class="mini" id="editbtn">${editing ? '退出编辑' : '编辑'}</button>
       <span id="clock"></span>
@@ -377,7 +388,7 @@ function render(s) {
 
   applyTheme(editing ? draft?.theme : s.layout?.theme);
   paintBackground(editing ? draft?.background : s.layout?.background);
-  wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireLogout(); wireQuit(); wireSpare();
+  wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireHouses(); wireLogout(); wireQuit(); wireSpare();
   wireEdit(); wireDrag(); wireSwap(); tick();
 }
 
@@ -394,6 +405,14 @@ function planSize(items) {
 
 function placed(p) {
   return p && ['x', 'y', 'w', 'h'].every((k) => typeof p[k] === 'number') ? p : null;
+}
+
+// 房屋切换器。服务端只在有两户以上时才带 houses 字段。
+function renderHouses(s) {
+  if (!s.houses?.length) return '';
+  return `<select class="house zh" id="house">${
+    s.houses.map((h) => `<option value="${esc(h.id)}"${h.id === s.house ? ' selected' : ''}>${esc(h.name)}</option>`).join('')
+  }</select>`;
 }
 
 function renderBand(hl) {
@@ -500,10 +519,12 @@ function renderSpare(u) {
     <div class="tiles">${tiles.map(renderCard).join('')}</div></details>`;
 }
 
-function renderGate(address, msg) {
+function renderGate(address, msg, s) {
   const ask = address !== undefined;   // undefined = 地址被钉住（mgs serve），不用问
   const addr = address ?? '';
-  app.innerHTML = `<div class="gate-screen">
+  // 登录页上也要能切户 —— 不然某一户连不上就卡死在那户了。
+  app.innerHTML = `${s?.houses?.length ? `<div class="bar top">${renderHouses(s)}<span class="grow"></span></div>` : ''}
+    <div class="gate-screen">
     <h1>${!ask || addr ? '要一个新的登录码' : '连上中枢'}</h1>
     <p>${!ask || addr ? '中枢的登录码短时有效，隔一阵就要重取一次。' : '第一次用，先告诉它中枢在哪。'}</p>
     <ol>
@@ -541,20 +562,23 @@ function renderGate(address, msg) {
     code.focus();
   };
 
+  wireHouses();
   go.onclick = submit;
   for (const el of [addrEl, code]) if (el) el.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
   // 地址已经有了就直接落在登录码上 —— 多数时候地址不用动。
   (addr || !addrEl ? code : addrEl).focus();
 }
 
-function renderTrouble(message, address) {
-  app.innerHTML = `<div class="gate-screen"><h1>连不上中枢</h1>
+function renderTrouble(message, address, s) {
+  app.innerHTML = `${s?.houses?.length ? `<div class="bar top">${renderHouses(s)}<span class="grow"></span></div>` : ''}
+    <div class="gate-screen"><h1>连不上中枢</h1>
     <p>${esc(message ?? '')}</p>
     <p style="color:var(--faint);font-size:12.5px;margin-top:20px">路由器和中枢网关都通电了吗？会自动重试。</p>
     <button class="mini" id="fix" style="margin-top:20px">改中枢地址</button></div>`;
+  wireHouses();
   const b = document.getElementById('fix');
   // 路由器重启后地址会变，这是最常见的「连不上」—— 得给一条自己改的出口。
-  if (b) b.onclick = () => { clearTimeout(timer); renderGate(address ?? '', message); };
+  if (b) b.onclick = () => { clearTimeout(timer); renderGate(address ?? '', message, s); };
 }
 
 function wireSpare() {
@@ -659,6 +683,20 @@ function wireAutostart() {
     const r = await api('/api/autostart', { enabled: box.checked });
     box.disabled = false;
     if (r.ok) box.checked = r.enabled;
+  };
+}
+
+function wireHouses() {
+  const el = document.getElementById('house');
+  if (!el) return;
+  el.onchange = async () => {
+    el.disabled = true;
+    const r = await api('/api/house', { id: el.value }).catch((e) => ({ ok: false, error: e.message }));
+    el.disabled = false;
+    if (!r.ok) return alert(r.error ?? '切换失败');
+    // 换了一户 = 换了配置、外观、网关，选中的房间和展开状态都不再适用。
+    picked = null; spareOpen = false;
+    poll();
   };
 }
 
