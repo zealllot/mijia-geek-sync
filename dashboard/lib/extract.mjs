@@ -44,19 +44,25 @@ export function extractRoom(graph, luxMap, ruleId) {
     chain.push({ scope: 'global', id: p.id, equals: p.v1, title: p.id, say: `${p.id} 不是 ${p.v1}` });
   }
 
+  // 一道还是两道都收：
+  //   两道 = 1302 那种「本地 或 全局」的双阈值（有一个全屋共用的参考传感器）
+  //   一道 = 1301 那种只有本地阈值的（没有全局传感器）
+  // 硬要求两道会把整个单阈值的住户当成场景规则跳掉。
   let lux = null;
-  if (cmps.length >= 2) {
+  if (cmps.length >= 1) {
     const [a, b] = cmps;
     const localVar = luxMap[a.props.did];
-    const globalVar = luxMap[b.props.did];
-    if (!localVar) warnings.push(`${a.props.did} 不在照度探针里，抠不出本地照度变量`);
-    if (!globalVar) warnings.push(`${b.props.did} 不在照度探针里，抠不出全局照度变量`);
-    if (localVar && globalVar) {
+    if (!localVar) {
+      warnings.push(`${a.props.did} 不在照度探针里，抠不出本地照度变量`);
+    } else {
       // 节点 id 一并带出来：阈值是图里的常量，要在看板上改就得知道改哪个节点。
-      lux = {
-        local: localVar, localThreshold: a.props.v1, localThresholdNode: a.id,
-        global: globalVar, zoneThreshold: b.props.v1, zoneThresholdNode: b.id,
-      };
+      lux = { local: localVar, localThreshold: a.props.v1, localThresholdNode: a.id };
+
+      if (b) {
+        const globalVar = luxMap[b.props.did];
+        if (!globalVar) warnings.push(`${b.props.did} 不在照度探针里，抠不出全局照度变量`);
+        else Object.assign(lux, { global: globalVar, zoneThreshold: b.props.v1, zoneThresholdNode: b.id });
+      }
     }
   }
 

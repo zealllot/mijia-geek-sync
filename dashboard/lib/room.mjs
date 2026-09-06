@@ -55,8 +55,11 @@ export function evaluateRoom(room, snapshot) {
     };
   }
 
-  // 照度两道是「或」：任一成立就开灯。都不成立才是「够亮了」。
-  if (lux && !(lux.localValue < lux.localThreshold) && !(lux.globalValue < lux.zoneThreshold)) {
+  // 照度是「或」：任一成立就开灯，都不成立才是「够亮了」。
+  // 没有全局那条腿时（1301），只看本地这一道。
+  const localOk = lux && lux.localValue < lux.localThreshold;
+  const globalOk = lux && lux.zoneThreshold !== undefined && lux.globalValue < lux.zoneThreshold;
+  if (lux && !localOk && !globalOk) {
     return { state: 'bright', say: '够亮了，自动化判断不需要开', chain, lux, unresolved, luxKnown: true };
   }
 
@@ -64,16 +67,19 @@ export function evaluateRoom(room, snapshot) {
   return { state: 'clear', say: '没发现阻碍', chain, lux, unresolved, luxKnown: lux !== null };
 }
 
+// 全局那条腿是可选的：1302 有一个全屋共用的参考传感器，1301 没有。
 function readLux(room, snapshot) {
   const l = room.lux;
   if (!l) return null;
   const local = snapshot.variables?.global?.[l.local];
+  if (local === undefined) return null;
+
+  const out = { localValue: local.value, localThreshold: l.localThreshold };
+  if (!l.global) return out;
+
   const global = snapshot.variables?.global?.[l.global];
-  if (local === undefined || global === undefined) return null;
-  return {
-    localValue: local.value, localThreshold: l.localThreshold,
-    globalValue: global.value, zoneThreshold: l.zoneThreshold,
-  };
+  if (global === undefined) return null;
+  return { ...out, globalValue: global.value, zoneThreshold: l.zoneThreshold };
 }
 
 // 照度那两道在规则图里是**短路**的：A3 成立就直接进 signalOr，
@@ -99,12 +105,22 @@ function luxSteps(room, lux, skipped) {
     : null;
   const withEdit = (o) => (edit ? { ...o, edit } : o);
 
-  if (skipped) return [step(localTitle, l.local, 'skip'), withEdit(step(globalTitle, l.global, 'skip'))];
-  if (!lux) return [step(localTitle, l.local, 'missing'), withEdit(step(globalTitle, l.global, 'missing'))];
+  // 没有全局那条腿时只出一道 —— 不凭空补一道住户根本没有的判定。
+  const hasGlobal = Boolean(l.global);
+
+  if (skipped) {
+    return [step(localTitle, l.local, 'skip'), ...(hasGlobal ? [withEdit(step(globalTitle, l.global, 'skip'))] : [])];
+  }
+  if (!lux) {
+    return [step(localTitle, l.local, 'missing'), ...(hasGlobal ? [withEdit(step(globalTitle, l.global, 'missing'))] : [])];
+  }
 
   const localOk = lux.localValue < l.localThreshold;
+  const localStep = { ...step(localTitle, l.local, localOk ? 'pass' : 'fail'), value: lux.localValue };
+  if (!hasGlobal) return [localStep];
+
   return [
-    { ...step(localTitle, l.local, localOk ? 'pass' : 'fail'), value: lux.localValue },
+    localStep,
     localOk
       ? withEdit(step(globalTitle, l.global, 'skip'))
       : withEdit({ ...step(globalTitle, l.global, lux.globalValue < l.zoneThreshold ? 'pass' : 'fail'), value: lux.globalValue }),

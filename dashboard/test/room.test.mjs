@@ -149,3 +149,45 @@ test('本地照度那一道永远不可改 —— 那是全屋共用的一个数
 
   assert.equal(r.chain.at(-2).edit, undefined);
 });
+
+// ---- 单阈值住户（1301 那种：没有全局照度传感器）----
+const single = {
+  title: '餐厅', rule: 'r1',
+  chain: [{ scope: 'global', id: 'ziDongHua', equals: 1, title: '灯光自动化总开关', say: '总开关关着' }],
+  lux: { local: 'luxCanTing', localThreshold: 300 },
+};
+const singleVars = (lux) => ({
+  variables: { global: { ziDongHua: { type: 'number', value: 1 }, luxCanTing: { type: 'number', value: lux } } },
+  rules: {},
+});
+
+test('单阈值：照度够暗就会开灯', () => {
+  const r = evaluateRoom(single, singleVars(120));
+
+  assert.equal(r.state, 'clear');
+  assert.deepEqual(r.chain.map((c) => c.status), ['pass', 'pass']);
+});
+
+test('单阈值：照度不够暗就是「够亮了」', () => {
+  const r = evaluateRoom(single, singleVars(400));
+
+  assert.equal(r.state, 'bright');
+  assert.match(r.say, /够亮/);
+});
+
+test('单阈值时只出一道照度步骤，不凭空补一道全局的', () => {
+  const r = evaluateRoom(single, singleVars(120));
+
+  assert.equal(r.chain.filter((c) => c.kind === 'lux').length, 1);
+  assert.equal(r.chain.at(-1).title, '本地照度 < 300');
+});
+
+test('单阈值时照度读不到也不硬说', () => {
+  const v = singleVars(120);
+  delete v.variables.global.luxCanTing;
+
+  const r = evaluateRoom(single, v);
+
+  assert.equal(r.luxKnown, false);
+  assert.equal(r.state, 'clear');
+});

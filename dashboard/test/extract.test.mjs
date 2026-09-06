@@ -91,3 +91,37 @@ test('把阈值所在的节点 id 也带出来 —— 要改它就得知道改�
   assert.equal(r.lux.zoneThresholdNode, 'A3b');
   assert.equal(r.lux.localThresholdNode, 'A3');
 });
+
+// 1301 是单阈值结构：只有本地照度，没有全局那条腿。
+const singleThreshold = {
+  cfg: { enable: true, userData: { name: '餐厅_有人_开灯' } },
+  nodes: [
+    N('A1', 'deviceInput', { did: 'sensor-a', operator: 'include', v1: [1] }, { output: ['G.input'] }),
+    N('G',  'varGet',    { scope: 'global', id: 'ziDongHua', operator: '=', v1: 1 }, { output: ['A2.input'] }),
+    N('A2', 'deviceGet', { did: 'light-1', dtype: 'boolean', operator: '=', v1: false }, { output: ['A3.input'] }),
+    N('A3', 'deviceGet', { did: 'sensor-a', dtype: 'int', operator: '<', v1: 300 }, { output: ['A4.input'] }),
+    N('A4', 'varGet',    { scope: 'global', id: 'yeJian', operator: '=', v1: 1 }, { output: ['O.input'] }),
+  ],
+};
+
+test('只有一道照度时也算房间，不当成场景跳过', () => {
+  // 1301 没有全局照度传感器，所以每条开灯规则只有一道本地阈值。
+  // 硬要求两道会把整户都当成场景规则跳掉。
+  const r = extractRoom(singleThreshold, { 'sensor-a': 'luxCanTing' }, '20260822001');
+
+  assert.deepEqual(r.lux, { local: 'luxCanTing', localThreshold: 300, localThresholdNode: 'A3' });
+});
+
+test('单阈值时闸门照样按拓扑抠 —— yeJian 在照度之后，不算闸门', () => {
+  const r = extractRoom(singleThreshold, { 'sensor-a': 'luxCanTing' }, '20260822001');
+
+  assert.deepEqual(r.chain.map((g) => g.id), ['ziDongHua']);
+});
+
+test('一道照度都没有才是场景规则', () => {
+  const scene = { cfg: { userData: { name: '全屋开灯' } }, nodes: [
+    N('A', 'varGet', { scope: 'global', id: 'ziDongHua', operator: '=', v1: 1 }, {}),
+  ] };
+
+  assert.equal(extractRoom(scene, {}, 'x').lux, null);
+});
