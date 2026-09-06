@@ -173,11 +173,15 @@ const send = (res, code, body, type = 'application/json; charset=utf-8') => {
   res.end(typeof body === 'string' ? body : JSON.stringify(body));
 };
 
-async function readBody(req) {
+// 上限按路由给。普通 JSON 64KB 足够；背景图走 base64，一张 186KB 的图
+// 编码后就有 250KB —— 用同一个上限会在真正的图片检查之前先炸。
+async function readBody(req, maxBytes = 64 * 1024) {
   let s = '';
   for await (const c of req) {
     s += c;
-    if (s.length > 64 * 1024) throw new Error('请求体过大');
+    if (s.length > maxBytes) {
+      throw new Error(`请求体过大（超过 ${Math.round(maxBytes / 1024)}KB）`);
+    }
   }
   return s ? JSON.parse(s) : {};
 }
@@ -280,7 +284,7 @@ const routes = {
 
   // 背景图。存进 Application Support，页面用 /bg?t=… 取。
   async 'POST /api/background'(req) {
-    const { dataUrl } = await readBody(req);
+    const { dataUrl } = await readBody(req, 12 * 1024 * 1024);   // base64 比原图大约三分之一
     const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl ?? ''));
     if (!m) return { ok: false, error: '只收 png / jpeg / webp' };
 

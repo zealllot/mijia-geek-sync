@@ -69,6 +69,9 @@ export function sanitizeLayout(raw) {
 
   const bg = cleanBackground(raw?.background);
   if (bg) out.background = bg;
+
+  const theme = cleanTheme(raw?.theme);
+  if (theme) out.theme = theme;
   return out;
 }
 
@@ -91,7 +94,12 @@ function cleanBackground(bg) {
 
   if (bg.kind === 'color') {
     // 这个值会进 style —— 不挡的话等于让页面往 CSS 里写任意串。
-    return /^#[0-9a-fA-F]{6}$/.test(bg.color ?? '') ? { kind: 'color', color: bg.color } : undefined;
+    return isHex(bg.color) ? { kind: 'color', color: bg.color } : undefined;
+  }
+
+  if (bg.kind === 'gradient') {
+    if (!isHex(bg.from) || !isHex(bg.to)) return undefined;
+    return { kind: 'gradient', from: bg.from, to: bg.to, angle: clamp(Number(bg.angle) || 160, 0, 360) };
   }
 
   if (bg.kind === 'image') {
@@ -105,6 +113,23 @@ function cleanBackground(bg) {
     };
   }
   return undefined;
+}
+
+// 主题：卡片底色 / 边框色 / 文字色 / 圆角 / 卡片透明度。
+//
+// 逐项清洗而不是整个丢 —— 一个颜色写坏了不该让其他设置跟着没。
+// 颜色会进 CSS 变量，所以必须是十六进制。
+function cleanTheme(t) {
+  if (!t || typeof t !== 'object') return undefined;
+  const out = {};
+  for (const k of ['panel', 'line', 'ink']) if (isHex(t[k])) out[k] = t[k];
+  if (Number.isFinite(Number(t.radius))) out.radius = clamp(Number(t.radius), 0, 32);
+  if (Number.isFinite(Number(t.panelAlpha))) out.panelAlpha = clamp(Number(t.panelAlpha), 0, 1);
+  return Object.keys(out).length ? out : undefined;
+}
+
+function isHex(v) {
+  return /^#[0-9a-fA-F]{6}$/.test(v ?? '');
 }
 
 function clamp(n, lo, hi) {

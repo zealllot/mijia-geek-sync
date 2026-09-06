@@ -91,3 +91,46 @@ test('模糊和变暗夹在可用范围内', () => {
 test('图片文件名必须干净，挡住路径穿越', () => {
   assert.equal(sanitizeLayout({ background: { kind: 'image', image: '../../etc/passwd' } }).background, undefined);
 });
+
+// ---- 渐变背景 ----
+test('渐变背景收两个颜色和一个角度', () => {
+  const out = sanitizeLayout({ background: { kind: 'gradient', from: '#6b7fa8', to: '#2a3550', angle: 160 } });
+
+  assert.deepEqual(out.background, { kind: 'gradient', from: '#6b7fa8', to: '#2a3550', angle: 160 });
+});
+
+test('渐变的颜色也必须是十六进制', () => {
+  assert.equal(sanitizeLayout({ background: { kind: 'gradient', from: 'url(x)', to: '#000000' } }).background, undefined);
+});
+
+test('角度夹在 0–360，缺了给个默认', () => {
+  assert.equal(sanitizeLayout({ background: { kind: 'gradient', from: '#000000', to: '#ffffff', angle: 999 } }).background.angle, 360);
+  assert.equal(sanitizeLayout({ background: { kind: 'gradient', from: '#000000', to: '#ffffff' } }).background.angle, 160);
+});
+
+// ---- 主题：卡片底色 / 边框 / 圆角 / 透明度 ----
+test('主题收颜色、圆角和透明度', () => {
+  const out = sanitizeLayout({ theme: { panel: '#1a2430', panelAlpha: 0.6, line: '#33414b', radius: 12, ink: '#e0e6ea' } });
+
+  assert.deepEqual(out.theme, { panel: '#1a2430', panelAlpha: 0.6, line: '#33414b', radius: 12, ink: '#e0e6ea' });
+});
+
+test('主题里的颜色不是十六进制就丢掉那一项，不是整个丢', () => {
+  // 一个颜色写坏了不该让其他设置全没。
+  const out = sanitizeLayout({ theme: { panel: 'red;x:1', line: '#33414b', radius: 8 } });
+
+  assert.equal(out.theme.panel, undefined);
+  assert.equal(out.theme.line, '#33414b');
+  assert.equal(out.theme.radius, 8);
+});
+
+test('圆角和透明度夹在可用范围', () => {
+  const out = sanitizeLayout({ theme: { radius: 999, panelAlpha: 5 } });
+
+  assert.equal(out.theme.radius, 32);
+  assert.equal(out.theme.panelAlpha, 1);
+});
+
+test('主题里全是垃圾时不留空壳', () => {
+  assert.equal(sanitizeLayout({ theme: { panel: 'x', line: 'y' } }).theme, undefined);
+});

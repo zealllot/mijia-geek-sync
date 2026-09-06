@@ -14,16 +14,17 @@
   --panel: #141a1f;
   --panel-dim: #101418;
   --line: #222b31;
-  --line-dim: #1a2126;
+  --line-dim: color-mix(in srgb, var(--line) 55%, transparent);
   --ink: #c8d2d8;
-  --ink-hi: #e6edf1;
-  --dim: #61727c;
-  --faint: #46545c;
-  --ghost: #3a454d;
+  --ink-hi: color-mix(in srgb, var(--ink) 88%, white);
+  --dim: color-mix(in srgb, var(--ink) 62%, transparent);
+  --faint: color-mix(in srgb, var(--ink) 44%, transparent);
+  --ghost: color-mix(in srgb, var(--ink) 30%, transparent);
   --ok: #4ade9a;
   --bright: #6b93b0;
   --alert: #d97757;
-  --off: #2a343a;
+  --off: color-mix(in srgb, var(--ink) 22%, transparent);
+  --radius: 4px;
   --mono: "SF Mono", Menlo, ui-monospace, monospace;
   --sans: "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
 }
@@ -50,10 +51,12 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .dragging { opacity: .85; box-shadow: 0 6px 24px #0008; z-index: 5; }
 
 .editbar {
-  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px;
-  padding: 11px 22px; background: #16202a; border-bottom: 1px solid var(--bright);
+  position: sticky; top: 0; z-index: 20;
+  padding: 10px 22px; background: #16202a; border-bottom: 1px solid var(--bright);
   font-size: 11px; letter-spacing: .14em; color: var(--ink);
 }
+.editbar .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 3px 0; }
+.editbar .tag { font-size: 10px; letter-spacing: .22em; color: var(--faint); flex: 0 0 34px; }
 .editbar .grow { flex-grow: 1; }
 .editbar input[type=range] { width: 96px; accent-color: var(--bright); vertical-align: middle; }
 .editbar input[type=color] { width: 30px; height: 24px; padding: 0; border: 1px solid var(--line); background: none; }
@@ -69,12 +72,13 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 /* ---------- 顶栏 / 底栏 ---------- */
 .bar {
   display: flex; align-items: center; gap: 13px; padding: 12px 22px;
-  background: var(--panel); font-size: 11px; letter-spacing: .16em; color: var(--dim);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  font-size: 11px; letter-spacing: .16em; color: var(--dim);
 }
-.bar.top { border-bottom: 1px solid var(--line); }
+.bar.top { border-bottom: 1px solid var(--line); backdrop-filter: blur(6px); }
 .bar.bot { border-top: 1px solid var(--line); font-size: 9.5px; color: var(--faint); gap: 20px; }
 .bar .grow { flex-grow: 1; }
-.bar .sep { color: #2e3941; }
+.bar .sep { color: color-mix(in srgb, var(--ink) 20%, transparent); }
 .led { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .led.ok     { background: var(--ok);     box-shadow: 0 0 7px #4ade9a88; }
 .led.bright { background: var(--bright); box-shadow: 0 0 7px #6b93b088; }
@@ -83,8 +87,8 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .led.sm { width: 6px; height: 6px; }
 
 /* ---------- 结论带 ---------- */
-.band { padding: 20px 22px 18px; border-bottom: 1px solid var(--line-dim); background: linear-gradient(#12181d, var(--ground)); }
-.band .where { font-size: 10px; letter-spacing: .26em; color: #55656e; margin-bottom: 10px; }
+.band { padding: 20px 22px 18px; border-bottom: 1px solid var(--line-dim); background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.band .where { font-size: 10px; letter-spacing: .26em; color: color-mix(in srgb, var(--ink) 46%, transparent); margin-bottom: 10px; }
 .band .say { font-family: var(--sans); font-size: clamp(20px, 3vw, 29px); line-height: 1.38; color: var(--ink-hi); letter-spacing: .01em; }
 .band .also { margin-top: 11px; font-size: 10.5px; letter-spacing: .14em; color: var(--bright); }
 
@@ -98,29 +102,30 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 /* ---------- 房间格 ---------- */
 .plan-grid { position: relative; overflow-x: auto; max-width: 100%; }
 .room {
-  position: absolute;
+  position: absolute; border-radius: var(--radius);
   background: var(--panel); border: 1px solid var(--line); padding: 12px 13px; cursor: pointer;
   /* 垂直居中而不是顶天立地 —— 跨行的房间块（主卧那种）中间会空一大片。 */
   display: flex; flex-direction: column; justify-content: center; gap: 9px; min-height: 76px;
   transition: border-color .2s ease, background .2s ease;
   font: inherit; color: inherit; text-align: left;
 }
-.room:hover { border-color: #33414b; }
+.room:hover { border-color: color-mix(in srgb, var(--ink) 26%, transparent); }
 .room:focus-visible { outline: 2px solid var(--bright); outline-offset: 2px; }
 .room .nm { display: flex; align-items: center; gap: 7px; }
 .room .nm b { font-family: var(--sans); font-size: 15px; font-weight: 400; color: var(--ink); }
 .room .st { font-size: 10.5px; letter-spacing: .12em; color: var(--faint); }
-.room .lx { font-size: 9.5px; letter-spacing: .1em; color: #3f4c55; }
+.room .lx { font-size: 9.5px; letter-spacing: .1em; color: color-mix(in srgb, var(--ink) 32%, transparent); }
 
-.room.bright { border-color: #2b3a44; }
+.room.bright { border-color: color-mix(in srgb, var(--bright) 40%, var(--line)); }
 .room.bright .st { color: var(--bright); }
 .room.blocked {
-  background: #1a1512; border: 1.5px solid var(--alert); box-shadow: inset 0 0 34px #d9775722;
+  background: color-mix(in srgb, var(--alert) 16%, var(--panel));
+  border: 1.5px solid var(--alert); box-shadow: inset 0 0 34px color-mix(in srgb, var(--alert) 14%, transparent);
 }
-.room.blocked .nm b { color: #f7ece7; font-weight: 500; }
+.room.blocked .nm b { color: var(--ink-hi); font-weight: 500; }
 .room.blocked .st { color: var(--alert); }
-.room.unconfigured { background: var(--panel-dim); border: 1px dashed #202830; cursor: default; }
-.room.unconfigured .nm b { color: #4f5c65; }
+.room.unconfigured { background: color-mix(in srgb, var(--panel) 40%, transparent); border: 1px dashed var(--line); cursor: default; }
+.room.unconfigured .nm b { color: color-mix(in srgb, var(--ink) 40%, transparent); }
 .room.unconfigured .st { color: var(--ghost); }
 .room.unknown { border-color: var(--alert); }
 .room.unknown .st { color: var(--alert); }
@@ -130,23 +135,23 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .legend span { display: flex; align-items: center; gap: 6px; }
 
 /* ---------- 闸门链 ---------- */
-.gate { background: var(--panel); border: 1px solid var(--line); padding: 10px 13px; display: flex; align-items: center; gap: 10px; }
+.gate { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 13px; display: flex; align-items: center; gap: 10px; }
 .gate + .gate { margin-top: 5px; }
 .gate .g-name { font-family: var(--sans); font-size: 13px; color: var(--ink); flex: 0 0 130px; }
 .gate .g-ref { font-size: 10.5px; color: var(--faint); flex-grow: 1; word-break: break-all; }
 .gate .g-note { font-size: 10.5px; letter-spacing: .1em; color: var(--faint); white-space: nowrap; }
-.gate.break { background: #1a1512; border-color: #d9775788; box-shadow: inset 0 0 22px #d9775718; }
-.gate.break .g-name { color: #f2e6e1; } .gate.break .g-note { color: var(--alert); }
-.gate.skip, .gate.fail { background: #0f1317; border-color: #1b2228; }
+.gate.break { background: color-mix(in srgb, var(--alert) 14%, var(--panel)); border-color: color-mix(in srgb, var(--alert) 60%, transparent); }
+.gate.break .g-name { color: var(--ink-hi); } .gate.break .g-note { color: var(--alert); }
+.gate.skip, .gate.fail { background: color-mix(in srgb, var(--panel) 45%, transparent); border-color: var(--line-dim); }
 .gate.fail .g-name { color: var(--dim); }
-.gate.skip .g-name { color: #5c6970; } .gate.skip .g-ref, .gate.skip .g-note { color: var(--ghost); }
+.gate.skip .g-name { color: color-mix(in srgb, var(--ink) 42%, transparent); } .gate.skip .g-ref, .gate.skip .g-note { color: var(--ghost); }
 .gate.fail .g-note { color: var(--bright); }
 .gate.missing { border-color: var(--alert); } .gate.missing .g-note { color: var(--alert); }
-.note { margin-top: 14px; font-size: 9.5px; line-height: 1.8; color: #3f4c55; letter-spacing: .06em; }
+.note { margin-top: 14px; font-size: 9.5px; line-height: 1.8; color: color-mix(in srgb, var(--ink) 32%, transparent); letter-spacing: .06em; }
 
 /* 可改的阈值：唯一会写规则图的东西，所以给它一个「这不是普通显示」的样子。 */
 .thr {
-  background: none; border: 1px dashed #33414b; color: inherit; font: inherit;
+  background: none; border: 1px dashed color-mix(in srgb, var(--ink) 26%, transparent); color: inherit; font: inherit;
   padding: 1px 6px; margin: 0 1px; cursor: pointer; border-radius: 2px;
 }
 .thr:hover { border-color: var(--bright); border-style: solid; color: var(--ink-hi); }
@@ -162,14 +167,14 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .tiles.placed { display: block; position: relative; overflow-x: auto; max-width: 100%; }
 .tiles.placed .tile { position: absolute; }
 .tile {
-  background: var(--panel); border: 1px solid var(--line); padding: 11px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 11px 12px;
   display: flex; align-items: center; gap: 9px; font: inherit; color: inherit; text-align: left;
 }
 .tile .t { flex-grow: 1; font-family: var(--sans); font-size: 13px; color: var(--ink); }
 .tile .v { font-size: 12px; color: var(--dim); white-space: nowrap; }
 .tile.on .v { color: var(--ok); }
 .tile.act { cursor: pointer; }
-.tile.act:hover { border-color: #33414b; }
+.tile.act:hover { border-color: color-mix(in srgb, var(--ink) 26%, transparent); }
 .tile.act:focus-visible { outline: 2px solid var(--bright); outline-offset: 2px; }
 .tile.act[aria-busy="true"] { opacity: .45; cursor: wait; }
 .tile.bad { border-color: var(--alert); } .tile.bad .v { color: var(--alert); }
@@ -202,12 +207,12 @@ details.spare[open] > summary::before { content: "- "; }
 .addr:focus { border-color: var(--bright); }
 .code { width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink-hi); font: 400 28px/1 var(--mono); letter-spacing: .42em; text-align: center; padding: 19px 0 19px .42em; outline: none; }
 .code:focus { border-color: var(--bright); }
-.code::placeholder { color: #2b353c; }
+.code::placeholder { color: color-mix(in srgb, var(--ink) 18%, transparent); }
 .btn { margin-top: 12px; width: 100%; padding: 14px; cursor: pointer; background: var(--ok); color: #0b1710; border: none; font: 400 14px/1 var(--sans); letter-spacing: .1em; }
 .btn:disabled { opacity: .4; cursor: wait; }
 .err { color: var(--alert); font-size: 12.5px; margin-top: 15px; min-height: 1.2em; font-family: var(--sans); }
-.mini { background: none; border: 1px solid var(--line); color: var(--faint); padding: 5px 11px; cursor: pointer; font: inherit; font-size: 10px; letter-spacing: .14em; }
-.mini:hover { border-color: #33414b; color: var(--dim); }
+.mini { background: color-mix(in srgb, var(--panel) 60%, transparent); border: 1px solid var(--line); color: var(--ink); border-radius: var(--radius); padding: 5px 11px; cursor: pointer; font: inherit; font-size: 10px; letter-spacing: .14em; }
+.mini:hover { border-color: color-mix(in srgb, var(--ink) 26%, transparent); color: var(--dim); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -245,6 +250,12 @@ function paintBackground(bg) {
     document.body.style.background = bg.color;
     return;
   }
+  if (bg.kind === 'gradient') {
+    bgLayer.innerHTML = '';
+    document.body.style.background = `linear-gradient(${bg.angle ?? 160}deg, ${bg.from}, ${bg.to})`;
+    document.body.style.backgroundAttachment = 'fixed';
+    return;
+  }
   document.body.style.background = '';
   bgLayer.innerHTML =
     `<div class="img" style="background-image:url('/bg?t=${encodeURIComponent(TOKEN)}&v=${bgVersion}');`
@@ -252,6 +263,39 @@ function paintBackground(bg) {
     + `<div class="veil" style="opacity:${bg.dim ?? 0}"></div>`;
 }
 let bgVersion = 0;
+
+// 主题写进 CSS 变量 —— 整套配色本来就是变量，所以改这几个就够。
+// 卡片底色带透明度：铺了背景图之后，不透一点就等于把图盖住了。
+function applyTheme(t) {
+  const root = document.documentElement.style;
+  for (const k of ['--panel', '--line', '--ink', '--radius']) root.removeProperty(k);
+  if (!t) return;
+  if (t.panel) root.setProperty('--panel', rgba(t.panel, t.panelAlpha ?? 1));
+  if (t.line) root.setProperty('--line', t.line);
+  if (t.ink) root.setProperty('--ink', t.ink);
+  if (t.radius !== undefined) root.setProperty('--radius', `${t.radius}px`);
+}
+
+function rgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
+// 取当前生效的值，好让编辑条里的选择器从对的颜色起步。
+function currentTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  const hex = (v) => {
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(v);
+    return m ? '#' + [1, 2, 3].map((i) => (+m[i]).toString(16).padStart(2, '0')).join('') : v.trim();
+  };
+  return {
+    panel: hex(cs.getPropertyValue('--panel')),
+    line: hex(cs.getPropertyValue('--line')),
+    ink: hex(cs.getPropertyValue('--ink')),
+    radius: parseInt(cs.getPropertyValue('--radius')) || 4,
+    panelAlpha: 1,
+  };
+}
 
 const LED = { clear: 'ok', bright: 'bright', blocked: 'alert', unconfigured: 'dead', unknown: 'alert' };
 
@@ -272,7 +316,7 @@ function render(s) {
   app.innerHTML = `
     <div class="bar top">
       <span class="led ${hl && hl.state === 'blocked' ? 'alert' : 'ok'}"></span>
-      <span class="zh" style="letter-spacing:.14em;color:#8fa0aa">模式看板</span>
+      <span class="zh" style="letter-spacing:.14em;color:color-mix(in srgb, var(--ink) 72%, transparent)">模式看板</span>
       <span class="grow"></span>
       <button class="mini" id="editbtn">${editing ? '退出编辑' : '编辑'}</button>
       <span id="clock"></span>
@@ -307,6 +351,7 @@ function render(s) {
       <button class="mini" id="quit">退出</button>
     </div>`;
 
+  applyTheme(editing ? draft?.theme : s.layout?.theme);
   paintBackground(editing ? draft?.background : s.layout?.background);
   wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireQuit(); wireSpare();
   wireEdit(); wireDrag(); tick();
@@ -607,23 +652,42 @@ function wireQuit() {
 
 function renderEditBar() {
   const bg = draft.background ?? {};
+  const th = draft.theme ?? {};
+  const cur = currentTheme();
+  const v = (k) => th[k] ?? cur[k];
+
   return `<div class="editbar">
-    <span>编辑中 &middot; 拖动挪位置，拖右下角改大小</span>
-    <label>背景
+    <div class="row">
+      <span class="tag">背景</span>
       <select id="bgkind">
-        <option value=""${!bg.kind ? ' selected' : ''}>无</option>
-        <option value="image"${bg.kind === 'image' ? ' selected' : ''}>图片</option>
-        <option value="color"${bg.kind === 'color' ? ' selected' : ''}>纯色</option>
-      </select></label>
-    ${bg.kind === 'image' ? `
-      <button class="btn-s" id="bgpick">选图</button>
-      <input type="file" id="bgfile" accept="image/png,image/jpeg,image/webp" hidden>
-      <label>模糊 <input type="range" id="bgblur" min="0" max="40" value="${bg.blur ?? 0}"></label>
-      <label>变暗 <input type="range" id="bgdim" min="0" max="95" value="${Math.round((bg.dim ?? 0) * 100)}"></label>` : ''}
-    ${bg.kind === 'color' ? `<input type="color" id="bgcolor" value="${bg.color ?? '#0d1013'}">` : ''}
-    <span class="grow"></span>
-    <button class="btn-s" id="ecancel">取消</button>
-    <button class="btn-s go" id="esave">保存</button>
+        ${[['', '无'], ['gradient', '渐变'], ['image', '图片'], ['color', '纯色']]
+          .map(([k, label]) => `<option value="${k}"${(bg.kind ?? '') === k ? ' selected' : ''}>${label}</option>`).join('')}
+      </select>
+      ${bg.kind === 'gradient' ? `
+        <input type="color" id="bgfrom" value="${bg.from ?? '#6b7fa8'}" title="起始色">
+        <input type="color" id="bgto" value="${bg.to ?? '#2a3550'}" title="结束色">
+        <label>角度 <input type="range" id="bgangle" min="0" max="360" value="${bg.angle ?? 160}"></label>` : ''}
+      ${bg.kind === 'image' ? `
+        <button class="btn-s" id="bgpick">选图</button>
+        <input type="file" id="bgfile" accept="image/png,image/jpeg,image/webp" hidden>
+        <label>模糊 <input type="range" id="bgblur" min="0" max="40" value="${bg.blur ?? 0}"></label>
+        <label>变暗 <input type="range" id="bgdim" min="0" max="95" value="${Math.round((bg.dim ?? 0) * 100)}"></label>` : ''}
+      ${bg.kind === 'color' ? `<input type="color" id="bgcolor" value="${bg.color ?? '#0d1013'}">` : ''}
+      <span class="grow"></span>
+      <button class="btn-s" id="ecancel">取消</button>
+      <button class="btn-s go" id="esave">保存</button>
+    </div>
+    <div class="row">
+      <span class="tag">外观</span>
+      <label>卡片 <input type="color" id="thpanel" value="${v('panel')}"></label>
+      <label>透明 <input type="range" id="thalpha" min="0" max="100" value="${Math.round((th.panelAlpha ?? 1) * 100)}"></label>
+      <label>描边 <input type="color" id="thline" value="${v('line')}"></label>
+      <label>文字 <input type="color" id="think" value="${v('ink')}"></label>
+      <label>圆角 <input type="range" id="thradius" min="0" max="32" value="${v('radius')}"></label>
+      <button class="btn-s" id="threset">恢复默认</button>
+      <span class="grow"></span>
+      <span style="color:var(--faint);font-size:10px">拖方块挪位置，拖右下角改大小</span>
+    </div>
   </div>`;
 }
 
@@ -665,14 +729,38 @@ function wireEdit() {
 
   $('bgkind').onchange = (e) => {
     const kind = e.target.value;
-    draft.background = kind === 'color' ? { kind: 'color', color: draft.background?.color ?? '#0d1013' }
+    draft.background =
+      kind === 'gradient' ? { kind: 'gradient', from: draft.background?.from ?? '#6b7fa8', to: draft.background?.to ?? '#2a3550', angle: draft.background?.angle ?? 160 }
+      : kind === 'color' ? { kind: 'color', color: draft.background?.color ?? '#0d1013' }
       : kind === 'image' ? { kind: 'image', image: draft.background?.image ?? '', blur: draft.background?.blur ?? 0, dim: draft.background?.dim ?? 0.35 }
       : undefined;
     redraw();
   };
-  if ($('bgcolor')) $('bgcolor').oninput = (e) => { draft.background.color = e.target.value; paintBackground(draft.background); };
-  if ($('bgblur')) $('bgblur').oninput = (e) => { draft.background.blur = Number(e.target.value); paintBackground(draft.background); };
-  if ($('bgdim')) $('bgdim').oninput = (e) => { draft.background.dim = Number(e.target.value) / 100; paintBackground(draft.background); };
+
+  // 背景控件：即时预览，不重画整页（重画会让滑块失焦）
+  const live = (id, set) => { const el = $(id); if (el) el.oninput = (e) => { set(e.target.value); paintBackground(draft.background); }; };
+  live('bgcolor', (x) => { draft.background.color = x; });
+  live('bgfrom', (x) => { draft.background.from = x; });
+  live('bgto', (x) => { draft.background.to = x; });
+  live('bgangle', (x) => { draft.background.angle = Number(x); });
+  live('bgblur', (x) => { draft.background.blur = Number(x); });
+  live('bgdim', (x) => { draft.background.dim = Number(x) / 100; });
+
+  // 外观控件：同样即时预览
+  const theme = (id, key, conv = (x) => x) => {
+    const el = $(id);
+    if (el) el.oninput = (e) => {
+      draft.theme = { ...currentTheme(), ...draft.theme, [key]: conv(e.target.value) };
+      applyTheme(draft.theme);
+    };
+  };
+  theme('thpanel', 'panel');
+  theme('thline', 'line');
+  theme('think', 'ink');
+  theme('thradius', 'radius', Number);
+  theme('thalpha', 'panelAlpha', (x) => Number(x) / 100);
+  if ($('threset')) $('threset').onclick = () => { draft.theme = undefined; applyTheme(null); redraw(); };
+
   if ($('bgpick')) {
     $('bgpick').onclick = () => $('bgfile').click();
     $('bgfile').onchange = async (e) => {
@@ -681,7 +769,6 @@ function wireEdit() {
       const dataUrl = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f); });
       const r = await api('/api/background', { dataUrl }).catch((err) => ({ ok: false, error: err.message }));
       if (!r.ok) return alert(r.error ?? '上传失败');
-      // 图片存在服务端了，刷一下缓存里的版本号让 /bg 重新取
       bgVersion++;
       draft.background = { ...draft.background, ...r.layout.background };
       redraw();
