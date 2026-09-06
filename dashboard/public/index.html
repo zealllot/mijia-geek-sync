@@ -40,14 +40,25 @@ body { background: var(--ground); color: var(--ink); font: 12px/1.6 var(--mono);
 
 /* ---------- 编辑模式 ---------- */
 body.editing { user-select: none; }
-body.editing .room, body.editing .tile { cursor: move; }
-body.editing .room::after, body.editing .tile::after {
+body.editing .room { cursor: move; }
+body.editing .tile { cursor: pointer; }
+body.editing .room::after {
   content: ""; position: absolute; right: 0; bottom: 0; width: 14px; height: 14px;
   cursor: nwse-resize; background:
     linear-gradient(135deg, transparent 50%, var(--bright) 50%, var(--bright) 68%, transparent 68%);
   opacity: .75;
 }
 body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright); }
+
+/* 换位置：点 A 再点 B，两个交换。等宽的一排卡片本来就不该能拉大小。 */
+.tile.swapsel {
+  border-color: var(--bright); box-shadow: 0 0 0 1px var(--bright), 0 4px 18px #0006;
+}
+.tile.swapsel::before {
+  content: "换到哪"; position: absolute; top: -9px; left: 9px;
+  background: var(--bright); color: #0b1218; font-size: 9px; letter-spacing: .1em;
+  padding: 1px 6px; border-radius: 2px;
+}
 .dragging { opacity: .85; box-shadow: 0 6px 24px #0008; z-index: 5; }
 
 .editbar {
@@ -142,8 +153,12 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .gate .g-note { font-size: 10.5px; letter-spacing: .1em; color: var(--faint); white-space: nowrap; }
 .gate.break { background: color-mix(in srgb, var(--alert) 14%, var(--panel)); border-color: color-mix(in srgb, var(--alert) 60%, transparent); }
 .gate.break .g-name { color: var(--ink-hi); } .gate.break .g-note { color: var(--alert); }
-.gate.skip, .gate.fail { background: color-mix(in srgb, var(--panel) 45%, transparent); border-color: var(--line-dim); }
-.gate.fail .g-name { color: var(--dim); }
+/* 不成立：判过了、条件没满足 —— 有信息，看得清 */
+.gate.fail { background: color-mix(in srgb, var(--bright) 10%, var(--panel)); border-color: color-mix(in srgb, var(--bright) 40%, transparent); }
+
+/* 没走到这一步：压根没判 —— 没信息，整行退到背景里去 */
+.gate.skip { background: color-mix(in srgb, var(--panel) 38%, transparent); border-color: var(--line-dim); opacity: .7; }
+.gate.fail .g-name { color: var(--ink); }
 .gate.skip .g-name { color: color-mix(in srgb, var(--ink) 42%, transparent); } .gate.skip .g-ref, .gate.skip .g-note { color: var(--ghost); }
 .gate.fail .g-note { color: var(--bright); }
 .gate.missing { border-color: var(--alert); } .gate.missing .g-note { color: var(--alert); }
@@ -236,7 +251,7 @@ async function api(path, body) {
 }
 
 let timer = null, lastFetch = null, picked = null, state = null, spareOpen = false;
-let editing = false, draft = null;   // draft = 编辑中的外观，保存前不落盘
+let editing = false, draft = null, swapPick = null;   // draft = 编辑中的外观，保存前不落盘
 
 const bgLayer = document.createElement('div');
 bgLayer.id = 'bg';
@@ -355,7 +370,7 @@ function render(s) {
   applyTheme(editing ? draft?.theme : s.layout?.theme);
   paintBackground(editing ? draft?.background : s.layout?.background);
   wireRooms(); wireToggles(); wireNumbers(); wireThresholds(); wireAutostart(); wireQuit(); wireSpare();
-  wireEdit(); wireDrag(); tick();
+  wireEdit(); wireDrag(); wireSwap(); tick();
 }
 
 // 子元素全绝对定位了，容器得自己算出高宽。
@@ -404,7 +419,7 @@ function renderChain(r) {
   };
   return `<div class="cap">${esc(r.title)} &middot; 开灯要过的 ${r.chain.length} 道${r.rule ? ` &middot; 规则 ${esc(r.rule)}` : ''}</div>
     ${r.chain.map((g) => `<div class="gate ${g.status}">
-      <i class="led sm ${g.status === 'pass' ? 'ok' : (g.status === 'skip' || g.status === 'fail') ? 'dead' : 'alert'}"></i>
+      <i class="led sm ${{ pass: 'ok', fail: 'bright', skip: 'dead' }[g.status] ?? 'alert'}"></i>
       <span class="g-name zh">${gateTitle(g)}</span>
       <span class="g-ref">${esc(g.ref)}${g.value !== undefined ? ' = ' + esc(g.value) : ''}</span>
       <span class="g-note zh">${NOTE[g.kind ?? 'gate'][g.status] ?? ''}</span>
@@ -784,7 +799,7 @@ async function exitEdit(save) {
     // 保存失败就**留在编辑模式**，别让人以为存上了。
     if (!r.ok) return alert((r.error ?? '保存失败') + '\n\n还在编辑模式，改好再保存。');
   }
-  editing = false; draft = null;
+  editing = false; draft = null; swapPick = null;
   document.body.classList.remove('editing');
   poll();
 }
@@ -794,10 +809,10 @@ function wireDrag() {
   if (!editing) return;
   const snap = (v) => Math.round(v / 4) * 4;
 
-  for (const el of app.querySelectorAll('.room[data-room], section .tiles .tile[data-tile]')) {
-    const key = el.dataset.room ?? el.dataset.tile;
-    const bag = el.dataset.room ? draft.rooms : draft.tiles;
-    const p = bag[key];
+  // 只有房间能拖能缩放。卡片是等宽的一排，能拉大小只会拉歪，所以改成换位置。
+  for (const el of app.querySelectorAll('.room[data-room]')) {
+    const key = el.dataset.room;
+    const p = draft.rooms[key];
     if (!p) continue;
 
     el.onpointerdown = (e) => {
@@ -830,6 +845,35 @@ function wireDrag() {
         grow(el);
       };
     };
+  }
+}
+
+// 卡片换位置：点 A 再点 B，两个交换。
+//
+// 只换 x/y，不换宽高 —— 那一排本来就是等宽的，换了尺寸反而会错开。
+function wireSwap() {
+  if (!editing) return;
+
+  for (const el of app.querySelectorAll('section .tiles .tile[data-tile]')) {
+    const key = el.dataset.tile;
+    if (!draft.tiles[key]) continue;
+
+    el.onclick = () => {
+      if (swapPick === key) { swapPick = null; return paint(); }
+      if (!swapPick) { swapPick = key; return paint(); }
+
+      const a = draft.tiles[swapPick], b = draft.tiles[key];
+      [a.x, a.y, b.x, b.y] = [b.x, b.y, a.x, a.y];
+      swapPick = null;
+      render(state);
+    };
+  }
+  paint();
+
+  function paint() {
+    for (const el of app.querySelectorAll('section .tiles .tile[data-tile]')) {
+      el.classList.toggle('swapsel', el.dataset.tile === swapPick);
+    }
   }
 }
 
