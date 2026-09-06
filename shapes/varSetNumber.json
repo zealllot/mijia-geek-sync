@@ -1,0 +1,26 @@
+{
+  "cfg": {
+    "name": "varSetNumber",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 740,
+      "height": 112,
+      "exprHeight": 30
+    },
+    "version": 0
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "input": null
+  },
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "elements": "{{elements}}",
+    "id": "{{var}}",
+    "scope": "global"
+  },
+  "type": "varSetNumber"
+}

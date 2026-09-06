@@ -1,0 +1,22 @@
+{
+  "cfg": {
+    "name": "signalOr",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 160,
+      "height": 180
+    },
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "input0": null,
+    "input1": null
+  },
+  "outputs": {
+    "output": []
+  },
+  "props": {},
+  "type": "signalOr"
+}

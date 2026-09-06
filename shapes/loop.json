@@ -1,0 +1,26 @@
+{
+  "cfg": {
+    "name": "loop",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 510,
+      "height": 140
+    },
+    "unit": "min",
+    "value": 5,
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "start": null,
+    "stop": null
+  },
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "interval": 300000
+  },
+  "type": "loop"
+}

@@ -1,0 +1,28 @@
+{
+  "cfg": {
+    "name": "varGet",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 532,
+      "height": 120
+    },
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "input": null
+  },
+  "outputs": {
+    "output": [],
+    "output2": []
+  },
+  "props": {
+    "id": "{{var}}",
+    "operator": "=",
+    "scope": "global",
+    "v1": 1,
+    "varType": "number"
+  },
+  "type": "varGet"
+}

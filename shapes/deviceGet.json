@@ -1,0 +1,30 @@
+{
+  "cfg": {
+    "name": "deviceGet",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 606,
+      "height": 164
+    },
+    "urn": "{{urn}}",
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "input": null
+  },
+  "outputs": {
+    "output": [],
+    "output2": []
+  },
+  "props": {
+    "did": "{{did}}",
+    "dtype": "boolean",
+    "operator": "=",
+    "piid": 1,
+    "siid": 2,
+    "v1": false
+  },
+  "type": "deviceGet"
+}

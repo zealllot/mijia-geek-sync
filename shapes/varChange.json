@@ -1,0 +1,26 @@
+{
+  "cfg": {
+    "name": "varChange",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 444,
+      "height": 152
+    },
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {},
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "id": "{{var}}",
+    "operator": "=",
+    "preload": true,
+    "scope": "global",
+    "v1": 1,
+    "varType": "number"
+  },
+  "type": "varChange"
+}

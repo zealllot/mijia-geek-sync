@@ -1,0 +1,27 @@
+{
+  "cfg": {
+    "name": "deviceOutput",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 528,
+      "height": 164
+    },
+    "urn": "{{urn}}",
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "trigger": null
+  },
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "did": "{{did}}",
+    "piid": 1,
+    "siid": 2,
+    "value": true
+  },
+  "type": "deviceOutput"
+}

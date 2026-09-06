@@ -1,0 +1,25 @@
+{
+  "cfg": {
+    "background": "#D9D2E9",
+    "contents": [
+      {
+        "insert": "① 每天 22:00 → 全局变量 夜间模式 = 1\n"
+      }
+    ],
+    "name": "nop",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 900,
+      "height": 100
+    },
+    "version": 0
+  },
+  "id": "{{id}}",
+  "inputs": {},
+  "outputs": {
+    "output": []
+  },
+  "props": {},
+  "type": "nop"
+}

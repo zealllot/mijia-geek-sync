@@ -1,0 +1,25 @@
+{
+  "cfg": {
+    "name": "delay",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 288,
+      "height": 112
+    },
+    "unit": "min",
+    "value": 2,
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "input": null
+  },
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "timeout": 120000
+  },
+  "type": "delay"
+}

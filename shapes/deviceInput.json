@@ -1,0 +1,30 @@
+{
+  "cfg": {
+    "name": "deviceInput",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 584,
+      "height": 206
+    },
+    "urn": "{{urn}}",
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {},
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "did": "{{did}}",
+    "dtype": "int",
+    "operator": "include",
+    "piid": 1096,
+    "preload": false,
+    "siid": 2,
+    "v1": [
+      1
+    ]
+  },
+  "type": "deviceInput"
+}

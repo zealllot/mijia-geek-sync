@@ -1,0 +1,28 @@
+{
+  "cfg": {
+    "happenType": "now",
+    "name": "alarmClock",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 416,
+      "height": 112
+    },
+    "tempOffset": 0,
+    "version": 0
+  },
+  "id": "{{id}}",
+  "inputs": {},
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "filter": {},
+    "hour": 21,
+    "isSunset": false,
+    "minute": 30,
+    "second": 0,
+    "type": "periodicAlarm"
+  },
+  "type": "alarmClock"
+}

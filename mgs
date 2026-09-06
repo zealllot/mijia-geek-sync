@@ -11,6 +11,9 @@
 #                                  全量对账推回；--prune 才会删线上多余项
 #   mgs enable <网关> [on|off] ...  启用/停用（与部署完全分开）
 #   mgs fmt    [--check] <文件...>  规范化 / 校验
+#   mgs survey <网关>               勘查：设备清单 + 逐台 spec，并猜一份 home.toml 草稿
+#   mgs generate <网关> [--out 目录] [--prune-generated]
+#                                  从 home.toml 生成这户的全部规则图（离线）
 #   mgs lint   <网关>               拿看板的眼睛看一遍：哪些是区、哪个变量是什么角色
 #   mgs serve  <网关> [--init-config]
 #                                  开一个本地网页看板，直观看各种模式参数
@@ -31,7 +34,9 @@ case "$cmd" in
   deploy) exec bash "$LIB/deploy.sh" "$@" ;;
   enable) exec bash "$LIB/enable.sh" "$@" ;;
   fmt)    exec bash "$LIB/fmt.sh"    "$@" ;;
-  lint)   exec bash "$LIB/lint.sh"   "$@" ;;
+  lint)     exec bash "$LIB/lint.sh"     "$@" ;;
+  survey)   exec bash "$LIB/survey.sh"   "$@" ;;
+  generate) exec bash "$LIB/generate.sh" "$@" ;;
   serve)  exec bash "$LIB/serve.sh"  "$@" ;;
   ""|-h|--help|help) usage ;;
   *) echo "未知命令: $cmd" >&2; echo >&2; usage >&2; exit 2 ;;

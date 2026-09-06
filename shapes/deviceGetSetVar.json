@@ -1,0 +1,29 @@
+{
+  "cfg": {
+    "name": "deviceGetSetVar",
+    "pos": {
+      "x": 0,
+      "y": 0,
+      "width": 566,
+      "height": 164
+    },
+    "urn": "{{urn}}",
+    "version": 1
+  },
+  "id": "{{id}}",
+  "inputs": {
+    "input": null
+  },
+  "outputs": {
+    "output": []
+  },
+  "props": {
+    "did": "{{did}}",
+    "dtype": "number",
+    "id": "{{var}}",
+    "piid": 1077,
+    "scope": "global",
+    "siid": 4
+  },
+  "type": "deviceGetSetVar"
+}
