@@ -1,39 +1,37 @@
-import { execFile } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 
 // 网关 IP 由 DHCP 分配会变，所以按 mDNS 实例名解析，失败回落到配置里的 fallback。
 //
-// 解析 dns-sd 的输出有两个坑，lib/common.sh 各踩了一半：
+// **不走 `dns-sd`。** 那是 macOS 独有的命令，而看板也要能装在 Windows 上
+// （见 docs/adr/0004）。`dns.lookup('<名>.local')` 两个平台都通 ——
+// macOS 走 Bonjour，Windows 10+ 的 DNS 客户端自己解析 `.local`。
+// 少一个外部命令，也少一段输出解析（那段解析这个仓库踩过两次坑）。
 //
-//   1. `...STARTING...` 那行也以数字开头。用 /^[0-9]/ 取第一行会匹配到它，
-//      打印出空的地址列就退出 —— 于是解析从来不成功，只是有 fallback 兜着看不出来。
-//   2. 第一条 Add 可能是回环地址（解析本机名时 127.0.0.1 排在前面）。
-//      取「第一条 Add」会让工具去连自己。
-//
-// 所以判据是：A/R 列必须是 Add，地址列必须是像样的 IPv4，且不是回环或 link-local。
-export function parseDnsSd(stdout) {
-  for (const line of stdout.split('\n')) {
-    const f = line.trim().split(/\s+/);
-    if (f[1] !== 'Add') continue;
-
-    const addr = f[5];
-    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(addr ?? '')) continue;
-    if (addr.startsWith('127.') || addr.startsWith('169.254.')) continue;
-
-    return addr;
+// 一条判据必须留着：**挡掉回环和 link-local**。实测查本机名时
+// `dns.lookup` 返回的就是 127.0.0.1，照单全收会让工具去连自己。
+export function usableAddress(list) {
+  for (const { address, family } of list ?? []) {
+    if (family !== 4) continue;
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(address)) continue;
+    if (address.startsWith('127.') || address.startsWith('169.254.')) continue;
+    return address;
   }
   return null;
 }
 
 // 解析一个 mDNS 实例名，失败返回 null。
-export function resolveMdns(instance, { timeoutSec = 4 } = {}) {
-  return new Promise((resolve) => {
-    execFile(
-      'dns-sd',
-      ['-t', String(timeoutSec), '-G', 'v4', `${instance}.local`],
-      { timeout: (timeoutSec + 2) * 1000 },
-      (_err, stdout) => resolve(parseDnsSd(stdout ?? '')),
-    );
-  });
+export async function resolveMdns(instance, { timeoutSec = 4 } = {}) {
+  const name = `${instance}.local`;
+  try {
+    // all:true —— 只看第一个会拿到回环地址（本机名就是这样）
+    const found = await Promise.race([
+      lookup(name, { all: true }),
+      new Promise((ok) => setTimeout(() => ok(null), timeoutSec * 1000)),
+    ]);
+    return usableAddress(found);
+  } catch {
+    return null;   // 解析不到不是错误，是「该用 fallback 了」
+  }
 }
 
 // 住户在登录页上填的地址。

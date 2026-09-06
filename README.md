@@ -71,6 +71,8 @@ mgs serve  home                   # 开一个本地网页看板
 ```bash
 mgs serve 1302                    # 本机开一个看板，浏览器自动打开
 mgs serve 1302 --init-config      # 从活着的网关生成语义地图骨架
+mgs survey 1302                   # 勘查：设备清单 + 逐台 spec（联机一次）
+mgs generate 1302                 # 从 home.toml 生成全部规则（离线）
 mgs lint 1302                     # 拿看板的眼睛看一遍：哪些是区、哪个变量是什么角色
 tools/build-app.sh --arch arm64 --mdns <实例名> --fallback <IP>
                                   # 打包成自带 Node 的 .app，传给住户双击
@@ -393,6 +395,59 @@ tools/build-app.sh --arch arm64|x64 --config data/1302/dashboard.json
 `--prune` 之前会自动做一次整机备份；本地 `graph/` 为空时直接拒绝执行
 （防止一次失败的 pull 把中枢清空）。删规则时先删它的规则域变量再删规则，不留 ghost data。
 
+## 给新一户配置
+
+一次上门跑完，步骤在 [docs/新一户.md](docs/新一户.md)。核心是：**规则不再手建**。
+
+```
+mgs survey  <户>   联机一次，拉设备清单 + 逐台 MIoT spec → devices.json
+（走一圈写 homes/<户>.toml：区、目标、开关键）
+mgs generate <户>  离线生成全部规则，每条 xgg rule validate --body 校验
+mgs deploy  <户>   在他家局域网内推上去
+```
+
+`home.toml` 里只写机器猜不出来的东西。**能推的都推**：
+
+| 闸门 | 从哪推出来 |
+|---|---|
+| `ziDongHua=1` | 默认每个区都有；`master = false` 才退出 |
+| `shouDong<区>=0` | 这个区声明了 `switches`，且 `[house] manualLock` 开着 |
+| `<场景变量>=0` | `[[scene]] zone` 指到这个区 |
+| `huiKe=0` | 这个区在 `guestMode.zones` 里 |
+
+拿两户做过回归（`tools/compare-graphs.py` 比结构，忽略 id、坐标、画布便签）：
+**1301 20/20 完全一致，1302 29/42**，差的多是场景规则 ——
+生成器把动作统一放执行规则，而 1302 手建时把灯放在了意图规则里，语义等价、布局不同。
+两户 63 条规则压缩成 276 行 TOML，其中真正的「例外」只有三行。
+
+**节点不手写**：每种节点从 `shapes/` 里那份「形状」深拷再填值（[ADR-0002](docs/adr/0002-shape-library-not-graph-templates.md)）。
+形状是从真实规则图抠出来再脱敏的，所以 schema 天然对；拼错了由离线校验器当场兜住。
+
+**阈值和延时不归生成器**（[ADR-0001](docs/adr/0001-generator-owns-structure-gateway-owns-tuned-values.md)）：
+本地已有这条规则的图就沿用图里的当前值，只有新建的区才用 `home.toml` 里的初值。
+所以重新生成的 diff 里只会出现结构变化。
+
+**区的槽位一旦分配就固定**，记在 `generated.json` 里。按区在 toml 里的位置编号是错的 ——
+删掉中间一个区，后面所有区的规则 id 全部前移，`deploy --prune` 会把一屋子规则删了重建。
+
+## 装在 Windows 上
+
+住户的电脑不一定是 Mac（[ADR-0004](docs/adr/0004-dashboard-runs-on-windows-too.md)）。
+看板本体跟平台无关，钉死的只有四处，都收在 `dashboard/lib/platform.mjs` 和两个打包脚本里：
+
+| | macOS | Windows |
+|---|---|---|
+| 打包 | `tools/build-app.sh --arch arm64\|x64` | `tools/build-win.sh` |
+| 形态 | `.app`，拖进「应用程序」双击 | 文件夹 + 双击「模式看板.cmd」 |
+| 状态目录 | `~/Library/Application Support/MijiaDashboard` | `%APPDATA%\MijiaDashboard` |
+| 开机自启 | LaunchAgent plist | 「启动」文件夹里的 `.cmd`，删掉＝关掉 |
+| 首次拦截 | Gatekeeper「仍要打开」 | SmartScreen「更多信息 → 仍要运行」 |
+
+**两个包都在 Mac 上打**，Windows 那个只是解压一个 win-x64 的 node 再拼文件，不编译。
+
+**mDNS 不再走 `dns-sd`**（那是 macOS 独有的命令）。`dns.lookup('<名>.local')`
+两边都通：macOS 走 Bonjour，Windows 10+ 的 DNS 客户端自己解析 `.local`。
+
 ## 踩过的坑（都已固化进代码）
 
 **原生 body 和 CLI 参数是两套语言。** `rule view` 返回的原生图能直接 `rule set` 推回去，
@@ -432,6 +487,17 @@ tools/build-app.sh --arch arm64|x64 --config data/1302/dashboard.json
 **mDNS 实例名在别的网段会指向别人的设备。** `xiaomi-gateway-hub1` 这种名字并不唯一，
 不在那户家里的时候解析它，很可能解析到一台毫不相干的机器上去。
 所以离线验证一律用假 xgg，测试配置里的地址写 `127.0.0.1`，不往真网段发包。
+
+**Windows 的 `.cmd` 里不能用 `for /f` 读一个不退出的命令的输出。**
+`for /f` 会**等命令跑完**才处理输出，而看板服务永远不退出 —— 照搬 macOS 那套
+「读 READY 行再开浏览器」，浏览器就永远打不开。改成让服务自己开（`MGS_DASH_OPEN=1`）。
+
+**规则图里 `dtype` 是按节点类型定的，不是属性的固有属性。** 比较节点
+（`deviceGet` / `deviceInput`）写 spec 的格式（`int` / `float`），而变量写入节点
+（`deviceGetSetVar` / `deviceOutput` 的变量形态）一律写 `number`。
+混着记会把 `number` 塞进 `deviceGet`，校验器报 `Invalid dtype`。
+同理 `delay` / `loop` 的时长在 `cfg.value/unit` 和 `props.timeout` 里各存一份，
+必须一致，单位只认 `ms` / `s` / `min` / `hour`。
 
 **`ok:false` 不能当数据用。** 未登录时 `variable watch` 返回 `{"ok":false,...}`，
 它能正常解析成 JSON，于是归一化时 `variables` 退成 `{}` —— 「没登录」被伪装成

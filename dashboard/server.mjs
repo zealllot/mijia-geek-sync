@@ -23,10 +23,12 @@ import { deriveRoles } from './lib/roles.mjs';
 import { deriveFloorplan, overlayFromConfig } from './lib/derive.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
+import { stateDir, openBrowser } from './lib/platform.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const STATE_DIR = process.env.MGS_DASH_STATE_DIR
-  || join(homedir(), 'Library', 'Application Support', 'MijiaDashboard');
+// 状态目录按平台走：macOS 的 Application Support、Windows 的 %APPDATA%
+// （见 dashboard/lib/platform.mjs 和 docs/adr/0004）
+const STATE_DIR = process.env.MGS_DASH_STATE_DIR || stateDir();
 // 语义地图的查找顺序：环境变量 → 住户机器上的那份 → .app 里打包进去的默认。
 // 三个都没有就是扁平只读模式（装上就能用，但看不到房间和结论）。
 //
@@ -650,15 +652,25 @@ const server = createServer(async (req, res) => {
   }
 });
 
+// 地址由谁来开浏览器：
+//   macOS  .app 的 launcher 脚本读这行再 `open` —— 那边一直是这么干的
+//   Windows 服务自己开（MGS_DASH_OPEN=1）。`.cmd` 里的 `for /f` 会等命令
+//          跑完才处理输出，而服务永不退出 —— 照搬 macOS 那套浏览器永远打不开。
+const AUTO_OPEN = process.env.MGS_DASH_OPEN === '1';
+
 server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {
     // 已经有一份在跑 —— 第二次双击就该只是打开浏览器，而不是起第二个服务。
-    process.stdout.write(`ALREADY_RUNNING http://127.0.0.1:${PORT}/?t=${TOKEN}\n`);
+    const url = `http://127.0.0.1:${PORT}/?t=${TOKEN}`;
+    process.stdout.write(`ALREADY_RUNNING ${url}\n`);
+    if (AUTO_OPEN) openBrowser(url);
     process.exit(0);
   }
   throw e;
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  process.stdout.write(`READY http://127.0.0.1:${PORT}/?t=${TOKEN}\n`);
+  const url = `http://127.0.0.1:${PORT}/?t=${TOKEN}`;
+  process.stdout.write(`READY ${url}\n`);
+  if (AUTO_OPEN) openBrowser(url);
 });
