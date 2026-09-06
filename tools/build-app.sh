@@ -2,7 +2,7 @@
 #
 # 把看板打包成一个自带 Node 运行时的 macOS .app，给住户双击用。
 #
-#   tools/build-app.sh --arch arm64 --mdns xiaomi-gateway-hub1-XXXX --fallback 192.168.5.25
+#   tools/build-app.sh --arch arm64 --config data/1302/dashboard.json
 #
 # 为什么要自带 Node：xgg 硬要求 Node ≥ 20.11，而 macOS 从 12.3 起不再自带 python3，
 # 也从来不自带 node。住户那台机器上大概率什么都没有 —— 「双击就能用」就得自带。
@@ -22,12 +22,13 @@ BUNDLE_ID="com.zealllot.mijia-dashboard"
 
 die() { echo "$*" >&2; exit 1; }
 
-ARCH="" MDNS="" FALLBACK="" OUT="$ROOT/dist"
+ARCH="" MDNS="" FALLBACK="" CONFIG="" OUT="$ROOT/dist"
 while [ $# -gt 0 ]; do
   case "$1" in
     --arch)     ARCH="${2:?}"; shift ;;
     --mdns)     MDNS="${2:?}"; shift ;;
     --fallback) FALLBACK="${2:?}"; shift ;;
+    --config)   CONFIG="${2:?}"; shift ;;
     --out)      OUT="${2:?}"; shift ;;
     *) die "不认识的参数: $1" ;;
   esac
@@ -91,6 +92,24 @@ mdns, fallback = sys.argv[1], sys.argv[2]
 print(json.dumps({k: v for k, v in (('mdns', mdns), ('fallback', fallback)) if v},
                  ensure_ascii=False, indent=2))
 PY
+fi
+
+# 语义地图。不给就是扁平只读模式 —— 能装能看，但没有房间平面图、
+# 没有闸门链、没有「为什么不亮」那句结论，也什么都改不了。
+if [ -n "$CONFIG" ]; then
+  [ -f "$CONFIG" ] || die "找不到配置 ${CONFIG}"
+  python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$CONFIG" \
+    || die "${CONFIG} 不是合法的 JSON"
+  mkdir -p "$APP/Contents/Resources/app/config"
+  cp "$CONFIG" "$APP/Contents/Resources/app/config/dashboard.json"
+  echo "  装进了语义地图：$(python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1]))
+r=len((d.get('floorplan') or {}).get('rooms') or [])
+g=sum(len(x.get('cards',[])) for x in d.get('groups',[]))
+print(f'{r} 个房间、{g} 张卡片')" "$CONFIG")"
+else
+  echo "  !! 没给 --config —— 住户打开会是扁平只读模式（没有房间图、没有结论、不能改）" >&2
 fi
 
 cat > "$APP/Contents/MacOS/launcher" <<'LAUNCHER'
