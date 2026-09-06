@@ -281,3 +281,32 @@ test('没有 floorplan 的配置照常工作，不带房间', () => {
   assert.equal(view.floorplan, null);
   assert.equal(view.headline, null);
 });
+
+const withApply = {
+  groups: [{ title: '全屋', cards: [
+    { kind: 'number', title: '全局亮度', scope: 'global', id: 'xggBrightness', min: 1, max: 100,
+      applyWith: { scope: 'global', id: 'tongBu', value: 1 } },
+    { kind: 'toggle', title: '观影模式', scope: 'global', id: 'xggCinema', on: 1, off: 0 },
+  ] }],
+};
+
+test('applyWith 跟着卡片进白名单 —— 写完这个值要紧跟一次脉冲', () => {
+  // 极客版的 varChange 只监听得到一次，所以「改参数」和「让它生效」是两步。
+  // 那第二步不该让人自己记着去戳。
+  const view = buildView(withApply, snapshot);
+
+  assert.deepEqual(view.writable['global.xggBrightness'].applyWith, { scope: 'global', id: 'tongBu', value: 1 });
+});
+
+test('没声明 applyWith 的卡片不带它', () => {
+  const view = buildView(withApply, snapshot);
+
+  assert.equal(view.writable['global.xggCinema'].applyWith, undefined);
+});
+
+test('applyWith 的目标本身不进白名单 —— 它由服务端发，不接受页面直接写', () => {
+  // 页面能直接写 tongBu 的话，这个脉冲就成了一个谁都能戳的裸开关。
+  const view = buildView(withApply, snapshot);
+
+  assert.equal(view.writable['global.tongBu'], undefined);
+});

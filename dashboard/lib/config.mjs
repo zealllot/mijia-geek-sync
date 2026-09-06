@@ -43,6 +43,12 @@ function validate(cfg, path) {
       if (c.kind === 'toggle' && (c.on === undefined || c.off === undefined)) {
         throw new Error(`${where}：toggle 卡片缺 on / off —— 不写清楚哪个值算开，页面不敢帮你翻`);
       }
+      if (c.applyWith !== undefined) {
+        const a = c.applyWith;
+        if (!a?.scope || !a?.id || a.value === undefined) {
+          throw new Error(`${where}：applyWith 要给全 scope / id / value —— 写完这个值之后往哪发脉冲`);
+        }
+      }
       if (c.kind === 'number') {
         // 没有上下界等于「能写任意数」。在别人家里，那可能把灯写成
         // 一个谁都没见过的状态，而且没有回头路。

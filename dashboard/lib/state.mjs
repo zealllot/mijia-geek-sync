@@ -32,8 +32,17 @@ function mappedView(config, snapshot) {
   // 它确实在白名单里。开关只收它声明过的那两个值，数值只收界内的数。
   const writable = {};
   for (const c of config.groups.flatMap((g) => g.cards)) {
-    if (c.kind === 'toggle') writable[`${c.scope}.${c.id}`] = { kind: 'toggle', on: c.on, off: c.off };
-    if (c.kind === 'number') writable[`${c.scope}.${c.id}`] = { kind: 'number', min: c.min, max: c.max };
+    // applyWith：写完这个变量，服务端紧跟着发一次脉冲。
+    //
+    // 极客版的 varChange 对同一个变量只监听得到一次，所以规则那边用了
+    // 「写 1 → 执行链第一步写回 0」的翻转法。代价是「改参数」和「让它生效」
+    // 变成两步 —— 那第二步不该让人自己记着去戳。
+    //
+    // 脉冲的目标**不进白名单**：它由服务端发，页面不能直接写，
+    // 不然这就成了一个谁都能戳的裸开关。
+    const apply = c.applyWith ? { applyWith: c.applyWith } : {};
+    if (c.kind === 'toggle') writable[`${c.scope}.${c.id}`] = { kind: 'toggle', on: c.on, off: c.off, ...apply };
+    if (c.kind === 'number') writable[`${c.scope}.${c.id}`] = { kind: 'number', min: c.min, max: c.max, ...apply };
   }
 
   const floorplan = floorplanOf(config, snapshot);

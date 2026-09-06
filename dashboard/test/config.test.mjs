@@ -210,3 +210,22 @@ test('不改原配置对象', () => {
 
   assert.equal(fpCfg.floorplan.rooms[0].lux.zoneThreshold, 1000);
 });
+
+test('applyWith 缺字段时抛错并指出是哪张卡', () => {
+  const p2 = join(dir, 'badapply.json');
+  writeFileSync(p2, JSON.stringify({ groups: [{ title: '全屋', cards: [
+    { kind: 'number', title: '全局亮度', scope: 'global', id: 'q', min: 1, max: 100, applyWith: { scope: 'global' } },
+  ] }] }));
+
+  assert.throws(() => loadConfig(p2), /全局亮度/);
+});
+
+test('applyWith 齐全时通过', () => {
+  const p2 = join(dir, 'goodapply.json');
+  writeFileSync(p2, JSON.stringify({ groups: [{ title: '全屋', cards: [
+    { kind: 'number', title: '全局亮度', scope: 'global', id: 'q', min: 1, max: 100,
+      applyWith: { scope: 'global', id: 'tongBu', value: 1 } },
+  ] }] }));
+
+  assert.doesNotThrow(() => loadConfig(p2));
+});

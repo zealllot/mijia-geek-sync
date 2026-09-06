@@ -203,6 +203,12 @@ body.editing .room:hover, body.editing .tile:hover { border-color: var(--bright)
 .tile .edit::-webkit-outer-spin-button, .tile .edit::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .tile .bounds { font-size: 9.5px; color: var(--ghost); white-space: nowrap; margin-left: 8px; }
 
+/* 改完会立刻推到灯上的卡片（服务端替你补一次同步脉冲），
+   跟「只是存个数、要等别的时机才生效」的区分开。 */
+.tile.sync .t::after {
+  content: "⇢"; color: var(--ok); margin-left: 6px; font-size: 11px;
+}
+
 section { margin-top: 26px; }
 details.spare { margin-top: 26px; }
 details.spare > summary { cursor: pointer; list-style: none; font-size: 10px; letter-spacing: .26em; color: var(--faint); padding: 8px 0; }
@@ -474,9 +480,9 @@ function renderCard(c, positioned) {
   }
   const unit = c.unit ? `<span class="u">${esc(c.unit)}</span>` : '';
   if (c.kind === 'number') {
-    return `<${editing ? 'div' : 'button'} class="tile ${editing ? '' : 'act num'}" title="${ref}"
+    return `<${editing ? 'div' : 'button'} class="tile ${editing ? '' : 'act num'}${c.applyWith ? ' sync' : ''}" title="${ref}"
       data-scope="${esc(c.scope)}" data-id="${esc(c.id)}" data-min="${esc(c.min)}" data-max="${esc(c.max)}"
-      data-value="${esc(c.value)}"${tag}>${head}<span class="v">${esc(c.value)}${unit}</span></${editing ? 'div' : 'button'}>`;
+      data-value="${esc(c.value)}" data-sync="${c.applyWith ? '1' : ''}"${tag}>${head}<span class="v">${esc(c.value)}${unit}</span></${editing ? 'div' : 'button'}>`;
   }
   return `<div class="tile" title="${ref}"${tag}>${head}<span class="v">${esc(c.value)}${unit}</span></div>`;
 }
@@ -591,7 +597,7 @@ function wireNumbers() {
 
       el.classList.add('editing');
       slot.innerHTML = `<input class="edit" type="number" inputmode="numeric" value="${before}" min="${min}" max="${max}">`
-        + `<span class="bounds">${min}–${max} 回车</span>`;
+        + `<span class="bounds">${min}–${max} 回车${el.dataset.sync ? ' · 立即生效' : ''}</span>`;
       const input = slot.querySelector('.edit');
       input.focus(); input.select();
 

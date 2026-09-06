@@ -158,3 +158,23 @@ test('提示文字必须关掉，否则会混进 JSON', () => {
 test('还没有地址时不编一个，让调用方去问住户', () => {
   assert.throws(() => xggEnv(() => null, '/tmp/s'), /还没有网关地址/);
 });
+
+test('stdout 空但 stderr 有合法 JSON 时，用 stderr 的', () => {
+  // xgg 把**错误**写 stderr、成功写 stdout。只收 stdout 的话，
+  // 所有失败都会变成「拿不到有效响应」—— 真实原因（登录码过期之类）全丢了。
+  const c = classify('', '{"ok":false,"error":{"code":"AUTH_REQUIRED","message":"gateway rejected"}}');
+
+  assert.equal(c.retryable, false);
+  assert.equal(c.data.error.code, 'AUTH_REQUIRED');
+});
+
+test('stdout 有货就不看 stderr —— stderr 里常混着警告', () => {
+  const c = classify('{"ok":true,"rules":[]}', '[xgg] warning: something');
+
+  assert.deepEqual(c.data, { ok: true, rules: [] });
+});
+
+test('两边都解析不出来才算失败', () => {
+  assert.equal(classify('', '[xgg] warning: not json').retryable, true);
+  assert.equal(classify('', '').retryable, true);
+});

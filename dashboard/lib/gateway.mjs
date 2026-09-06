@@ -11,15 +11,15 @@
 // 和 lib/common.sh 的一处不同：common.sh 在 ok===false 时也重试三次，
 // 看板不能这么做 —— 未登录时 AUTH_REQUIRED 是个确定的答案，
 // 每 10 秒的轮询重试三次纯属浪费。解析成功就返回，由调用方决定怎么处理。
-export function classify(stdout) {
-  const text = stdout.trim();
-  if (!text) return { retryable: true, reason: 'empty' };
-
-  try {
-    return { retryable: false, data: JSON.parse(text) };
-  } catch {
-    return { retryable: true, reason: 'unparseable' };
+// **stderr 也要看**：xgg 把错误 JSON 写 stderr、成功写 stdout。
+// 只收 stdout 的话，所有失败都会变成「拿不到有效响应」——
+// 登录码过期、网关拒绝这些真实原因全丢了，人只能看到一句没用的话。
+export function classify(stdout, stderr = '') {
+  for (const text of [stdout.trim(), stderr.trim()]) {
+    if (!text) continue;
+    try { return { retryable: false, data: JSON.parse(text) }; } catch { /* 换下一个 */ }
   }
+  return { retryable: true, reason: stdout.trim() || stderr.trim() ? 'unparseable' : 'empty' };
 }
 
 // 把 xgg 的两份原始输出归一成视图层要的快照。
@@ -47,7 +47,8 @@ export function normalizeSnapshot(watchOut, ruleListOut) {
 export async function callXgg(args, { run, attempts = 3 } = {}) {
   let last = null;
   for (let i = 0; i < attempts; i++) {
-    const c = classify(await run(args));
+    const r = await run(args);
+    const c = typeof r === 'string' ? classify(r) : classify(r.stdout ?? '', r.stderr ?? '');
     if (!c.retryable) return c.data;
     last = c.reason;
   }
@@ -107,9 +108,9 @@ export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs 
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      let out = '';
+      let out = '', err = '';
       child.stdout.on('data', (d) => (out += d));
-      child.stderr.resume();
+      child.stderr.on('data', (d) => (err += d));
 
       // xgg 自己有 --timeout，但子进程本身可能卡住。
       // 硬杀掉并给一个结构化错误，好过把 HTTP 请求挂死。
@@ -119,7 +120,7 @@ export function makeGateway({ nodeBin, xggCli, baseUrl, snapshotsDir, timeoutMs 
       }, timeoutMs);
 
       child.on('error', (e) => (clearTimeout(timer), reject(e)));
-      child.on('close', () => (clearTimeout(timer), resolve(out)));
+      child.on('close', () => (clearTimeout(timer), resolve({ stdout: out, stderr: err })));
     });
 
   return {

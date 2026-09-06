@@ -275,6 +275,25 @@ const routes = {
       `${new Date().toISOString()}\t${scope}.${id}\t${JSON.stringify(before.value)} → ${JSON.stringify(num)}\n`,
     );
 
+    // 脉冲：极客版的 varChange 只监听得到一次，规则那边用「写 1 → 执行链第一步
+    // 写回 0」的翻转法绕开。所以改完参数要紧跟一发，否则灯不动 ——
+    // 这一步由服务端做，不指望人记着自己去戳。
+    const apply = view.writable[`${scope}.${id}`]?.applyWith;
+    if (apply) {
+      const t = snapshot.variables[apply.scope]?.[apply.id];
+      if (!t) {
+        return { ok: false, error: `值写进去了，但同步变量 ${apply.scope}.${apply.id} 在网关上不存在 —— 灯不会动` };
+      }
+      const pulse = await gw.setVariable({ scope: apply.scope, id: apply.id, value: apply.value, type: t.type });
+      if (pulse.ok === false) {
+        return { ok: false, error: `值写进去了，但同步没发出去：${pulse.error?.message ?? '网关拒绝'} —— 灯不会动` };
+      }
+      appendFileSync(
+        join(STATE_DIR, 'writes.log'),
+        `${new Date().toISOString()}\t${apply.scope}.${apply.id}\t同步脉冲 → ${JSON.stringify(apply.value)}\n`,
+      );
+    }
+
     // 不做乐观更新：立刻重读，页面显示网关的真实值。
     cache.invalidate();
     return { ok: true };
