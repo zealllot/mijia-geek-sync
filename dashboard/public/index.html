@@ -257,8 +257,9 @@ function paintBackground(bg) {
     return;
   }
   document.body.style.background = '';
+  if (!bg.image) { bgLayer.innerHTML = ''; return; }
   bgLayer.innerHTML =
-    `<div class="img" style="background-image:url('/bg?t=${encodeURIComponent(TOKEN)}&v=${bgVersion}');`
+    `<div class="img" style="background-image:url('/bg?t=${encodeURIComponent(TOKEN)}&img=${encodeURIComponent(bg.image ?? '')}');`
     + `filter:blur(${bg.blur || 0}px)"></div>`
     + `<div class="veil" style="opacity:${bg.dim ?? 0}"></div>`;
 }
@@ -769,8 +770,9 @@ function wireEdit() {
       const dataUrl = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f); });
       const r = await api('/api/background', { dataUrl }).catch((err) => ({ ok: false, error: err.message }));
       if (!r.ok) return alert(r.error ?? '上传失败');
-      bgVersion++;
-      draft.background = { ...draft.background, ...r.layout.background };
+      // 图存到服务端了，但**先只放进 draft** —— 落盘是「保存」那一步的事，
+      // 不然点「取消」也取消不掉已经传上去的图。
+      draft.background = { ...draft.background, kind: 'image', image: r.image };
       redraw();
     };
   }
@@ -779,7 +781,8 @@ function wireEdit() {
 async function exitEdit(save) {
   if (save) {
     const r = await api('/api/layout', draft).catch((e) => ({ ok: false, error: e.message }));
-    if (!r.ok) return alert(r.error ?? '保存失败');
+    // 保存失败就**留在编辑模式**，别让人以为存上了。
+    if (!r.ok) return alert((r.error ?? '保存失败') + '\n\n还在编辑模式，改好再保存。');
   }
   editing = false; draft = null;
   document.body.classList.remove('editing');

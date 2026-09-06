@@ -134,3 +134,37 @@ test('圆角和透明度夹在可用范围', () => {
 test('主题里全是垃圾时不留空壳', () => {
   assert.equal(sanitizeLayout({ theme: { panel: 'x', line: 'y' } }).theme, undefined);
 });
+
+// ---- 丢掉什么要说出来 ----
+import { layoutProblems } from '../lib/layout.mjs';
+
+test('选了图片但没图名时，说出来而不是默默丢掉', () => {
+  // 用户选了「图片」还没传就点保存 —— 静默丢弃会让他以为存上了。
+  const bad = layoutProblems({ background: { kind: 'image', image: '' } });
+
+  assert.deepEqual(bad, ['背景选了图片，但还没传图']);
+});
+
+test('颜色写坏了也说出来', () => {
+  assert.deepEqual(layoutProblems({ background: { kind: 'color', color: 'blue' } }), ['背景颜色不是十六进制（比如 #3b4a6b）']);
+  assert.deepEqual(layoutProblems({ background: { kind: 'gradient', from: '#000000', to: 'x' } }), ['渐变的两个颜色都要是十六进制']);
+});
+
+test('位置写坏了报出是哪一个', () => {
+  assert.deepEqual(
+    layoutProblems({ rooms: { 客厅: { x: 'a', y: 0, w: 1, h: 1 }, 主卧: { x: 0, y: 0, w: 10, h: 10 } } }),
+    ['「客厅」的位置不是数字'],
+  );
+});
+
+test('干净的东西不报', () => {
+  assert.deepEqual(layoutProblems({
+    background: { kind: 'gradient', from: '#8e9dc4', to: '#3b4a6b', angle: 160 },
+    rooms: { 客厅: { x: 0, y: 0, w: 100, h: 50 } },
+    theme: { panel: '#20293c', radius: 14 },
+  }), []);
+});
+
+test('压根没提到的东西不报', () => {
+  assert.deepEqual(layoutProblems({ rooms: { 客厅: { x: 0, y: 0, w: 100, h: 50 } } }), []);
+});

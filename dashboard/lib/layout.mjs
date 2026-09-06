@@ -135,3 +135,31 @@ function isHex(v) {
 function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, Math.round(n * 100) / 100));
 }
+
+// 清洗会丢掉不合法的东西 —— 但**丢了必须说**。
+//
+// 用户选了「图片」还没传就点保存，静默丢弃会让他以为存上了；
+// 而这正是「保存了但没生效」这类最难查的问题的来源。
+export function layoutProblems(raw) {
+  const bad = [];
+  const bg = raw?.background;
+
+  if (bg?.kind === 'image' && !cleanBackground(bg)) {
+    bad.push(bg.image ? '背景图的文件名不对' : '背景选了图片，但还没传图');
+  }
+  if (bg?.kind === 'color' && !cleanBackground(bg)) {
+    bad.push('背景颜色不是十六进制（比如 #3b4a6b）');
+  }
+  if (bg?.kind === 'gradient' && !cleanBackground(bg)) {
+    bad.push('渐变的两个颜色都要是十六进制');
+  }
+
+  for (const [label, map] of [['', raw?.rooms], ['', raw?.tiles]]) {
+    for (const [k, v] of Object.entries(map ?? {})) {
+      if (!v || ['x', 'y', 'w', 'h'].some((f) => typeof v[f] !== 'number' || !Number.isFinite(v[f]))) {
+        bad.push(`「${k}」的位置不是数字${label}`);
+      }
+    }
+  }
+  return bad;
+}

@@ -16,7 +16,7 @@ import { makeCache } from './lib/cache.mjs';
 import { buildView, assertWritable } from './lib/state.mjs';
 import { loadConfig, buildSkeleton, buildFloorplanSkeleton, applyLiveThresholds } from './lib/config.mjs';
 import { buildThresholdPatch, unexpectedChanges } from './lib/threshold.mjs';
-import { applyLayout, sanitizeLayout } from './lib/layout.mjs';
+import { applyLayout, sanitizeLayout, layoutProblems } from './lib/layout.mjs';
 import { normalizeAddress, resolveMdns } from './lib/address.mjs';
 import { autostartEnabled, setAutostart } from './lib/autostart.mjs';
 
@@ -275,9 +275,15 @@ const routes = {
     return { ok: true, layout: loadLayout() };
   },
 
-  // 页面写的，所以清洗一遍再落盘 —— 位置会进 style，背景色也是。
+  // 页面写的，所以清洗一遍再落盘 —— 位置会进 style，颜色会进 CSS 变量。
   async 'POST /api/layout'(req) {
-    const clean = sanitizeLayout(await readBody(req));
+    const raw = await readBody(req);
+    const bad = layoutProblems(raw);
+
+    // 丢了必须说。静默丢弃正是「保存了但没生效」这类问题的来源。
+    if (bad.length) return { ok: false, error: bad.join('；') };
+
+    const clean = sanitizeLayout(raw);
     writeFileSync(LAYOUT_FILE, JSON.stringify(clean, null, 2));
     return { ok: true, layout: clean };
   },
@@ -291,14 +297,13 @@ const routes = {
     const buf = Buffer.from(m[2], 'base64');
     if (buf.length > 6 * 1024 * 1024) return { ok: false, error: `图太大了（${(buf.length / 1048576).toFixed(1)}MB），压到 6MB 以内` };
 
-    const name = `background.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
+    // 用时间戳做文件名：换图时旧的 /bg 缓存不会顶掉新图。
+    const name = `background-${Date.now()}.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
     writeFileSync(join(STATE_DIR, name), buf);
 
-    const layout = loadLayout();
-    layout.background = { ...(layout.background ?? {}), kind: 'image', image: name };
-    const clean = sanitizeLayout(layout);
-    writeFileSync(LAYOUT_FILE, JSON.stringify(clean, null, 2));
-    return { ok: true, layout: clean };
+    // **只存文件，不碰 layout.json** —— 落盘是「保存」那一步的事。
+    // 上传就写盘的话，用户点「取消」也取消不掉已经传上去的图。
+    return { ok: true, image: name };
   },
 
   // 看板唯一会写规则图的地方。
@@ -383,7 +388,11 @@ const server = createServer(async (req, res) => {
   if (given !== TOKEN) return send(res, 403, { ok: false, error: 'token 不对 —— 从应用图标重新打开一次' });
 
   if (url.pathname === '/bg') {
-    const bg = loadLayout().background;
+    // 编辑中还没保存的图也要能预览，所以允许用 ?img= 指名。
+    const asked = url.searchParams.get('img');
+    const bg = asked && /^background-\d+\.(png|jpg|webp)$/.test(asked)
+      ? { kind: 'image', image: asked }
+      : loadLayout().background;
     if (bg?.kind !== 'image') return send(res, 404, { ok: false, error: 'no background' });
     const p = join(STATE_DIR, bg.image);
     if (!existsSync(p)) return send(res, 404, { ok: false, error: 'no background' });
