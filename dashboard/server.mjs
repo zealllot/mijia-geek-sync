@@ -100,8 +100,14 @@ const LAYOUT_FILE_SINGLE = join(STATE_DIR, 'layout.json');
 function layoutFile() { return houseFile(STATE_DIR, 'layout', houseId()); }
 
 // 外观（位置、背景）跟语义配置分开存 —— 见 lib/layout.mjs。
+// 外观：住户自己摆的优先，包里带的当初始值。
+// 住户一动就写到 state 目录，从此以包里那份为起点、以他自己那份为准。
 function loadLayout() {
-  try { return sanitizeLayout(JSON.parse(readFileSync(layoutFile(), 'utf8'))); } catch { return {}; }
+  const tries = [layoutFile(), houseFile(join(HERE, 'config'), 'layout', houseId())];
+  for (const p of tries) {
+    try { return sanitizeLayout(JSON.parse(readFileSync(p, 'utf8'))); } catch { /* 下一个 */ }
+  }
+  return {};
 }
 
 function addressFile() { return houseFile(STATE_DIR, 'address', houseId()); }

@@ -27,6 +27,7 @@ die() { echo "$*" >&2; exit 1; }
 
 ARCH="" MDNS="" FALLBACK="" CONFIG="" HOUSES="" OUT="$ROOT/dist"
 HOUSE_CONFIGS=()
+HOUSE_LAYOUTS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --arch)     ARCH="${2:?}"; shift ;;
@@ -35,6 +36,7 @@ while [ $# -gt 0 ]; do
     --config)   CONFIG="${2:?}"; shift ;;
     --houses)   HOUSES="${2:?}"; shift ;;
     --house-config) HOUSE_CONFIGS+=("${2:?}"); shift ;;
+    --house-layout) HOUSE_LAYOUTS+=("${2:?}"); shift ;;
     --out)      OUT="${2:?}"; shift ;;
     *) die "不认识的参数: $1" ;;
   esac
@@ -117,6 +119,16 @@ print(', '.join(h.get('name', h['id']) for h in json.load(open(sys.argv[1]))))" 
     python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" || die "${f} 不是合法的 JSON"
     cp "$f" "$APP/Contents/Resources/app/config/dashboard.${id}.json"
     echo "    ${id} ← $(basename "$f")"
+  done
+
+  # 外观（拖好的位置、背景、配色）。给了就是住户打开时的起点，
+  # 他一动就写到自己的 Application Support，从此以他那份为准。
+  for hl in ${HOUSE_LAYOUTS[@]+"${HOUSE_LAYOUTS[@]}"}; do
+    id="${hl%%:*}"; f="${hl#*:}"
+    [ -f "$f" ] || die "找不到 ${f}"
+    python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" || die "${f} 不是合法的 JSON"
+    cp "$f" "$APP/Contents/Resources/app/config/layout.${id}.json"
+    echo "    ${id} 外观 ← $(basename "$f")"
   done
 
   # 哪户没给配置，打开那户就是扁平只读 —— 说出来，别让人以为都装好了
