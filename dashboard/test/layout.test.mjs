@@ -168,3 +168,38 @@ test('干净的东西不报', () => {
 test('压根没提到的东西不报', () => {
   assert.deepEqual(layoutProblems({ rooms: { 客厅: { x: 0, y: 0, w: 100, h: 50 } } }), []);
 });
+
+// ---- 位置按规则 id 存，不按房间名 ----
+const named = {
+  floorplan: { rooms: [{ title: '客厅', rule: '20260822005' }] },
+  groups: [],
+};
+
+test('位置优先按规则 id 认 —— 改房间名不该把摆好的位置弄丢', () => {
+  // 早先按房间名存，「沙发」改成「客厅」之后那一格就成孤儿了。
+  const out = applyLayout(named, { rooms: { '20260822005': { x: 40, y: 50, w: 200, h: 100 } } });
+
+  assert.equal(out.floorplan.rooms[0].x, 40);
+});
+
+test('旧的按名字存的还认 —— 已经拖好的布局不能一升级就没', () => {
+  const out = applyLayout(named, { rooms: { 客厅: { x: 7, y: 8, w: 90, h: 40 } } });
+
+  assert.equal(out.floorplan.rooms[0].x, 7);
+});
+
+test('两种都在时以规则 id 为准', () => {
+  const out = applyLayout(named, { rooms: {
+    '20260822005': { x: 40, y: 50, w: 200, h: 100 },
+    客厅: { x: 7, y: 8, w: 90, h: 40 },
+  } });
+
+  assert.equal(out.floorplan.rooms[0].x, 40);
+});
+
+test('没有规则的房间还是按名字认', () => {
+  const noRule = { floorplan: { rooms: [{ title: '主卫' }] }, groups: [] };
+  const out = applyLayout(noRule, { rooms: { 主卫: { x: 3, y: 4, w: 80, h: 30 } } });
+
+  assert.equal(out.floorplan.rooms[0].x, 3);
+});

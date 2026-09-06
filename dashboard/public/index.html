@@ -418,7 +418,7 @@ function render(s) {
 function planSize(items) {
   let w = 0, h = 0;
   for (const it of items) {
-    const p = placed(draft?.rooms?.[it.title] ?? draft?.tiles?.[it.ref]) ?? it;
+    const p = placed(draft?.rooms?.[roomKey(it)] ?? draft?.tiles?.[it.ref]) ?? it;
     w = Math.max(w, (p.x ?? 0) + (p.w ?? 0));
     h = Math.max(h, (p.y ?? 0) + (p.h ?? 0));
   }
@@ -479,13 +479,17 @@ function renderBand(hl) {
 }
 
 function renderRoom(r) {
-  const p = placed(draft?.rooms?.[r.title]) ?? r;
+  const p = placed(draft?.rooms?.[roomKey(r)]) ?? r;
   const pos = `left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px`;
-  const lx = r.lux ? `<span class="lx">本地 ${esc(r.lux.localValue)} / ${esc(r.lux.localThreshold)} &middot; 全局 ${esc(r.lux.globalValue)} / ${esc(r.lux.zoneThreshold)}</span>` : '';
+  // 全局那条腿是可选的（1301 那种单阈值住户没有）——
+  // 无条件画会得到「全局 / 」这么一截空的。
+  const lx = !r.lux ? '' : `<span class="lx">本地 ${esc(r.lux.localValue)} / ${esc(r.lux.localThreshold)}${
+    r.lux.zoneThreshold === undefined ? '' : ` &middot; 全局 ${esc(r.lux.globalValue)} / ${esc(r.lux.zoneThreshold)}`
+  }</span>`;
   // 编辑模式下一律用 div —— button 会吞掉拖拽用的 pointer 事件。
   const tag = editing || r.state === 'unconfigured' ? 'div' : 'button';
   return `<${tag} class="room ${r.state}${r.title === picked ? ' sel' : ''}" style="${pos}"
-      data-room="${esc(r.title)}"${tag === 'button' ? ' type="button"' : ''}>
+      data-room="${esc(r.title)}" data-key="${esc(roomKey(r))}"${tag === 'button' ? ' type="button"' : ''}>
     <span class="nm"><i class="led ${LED[r.state]}"></i><b>${esc(r.title)}</b></span>
     <span style="display:flex;flex-direction:column;gap:3px">
       <span class="st zh">${esc(r.say)}</span>${lx}
@@ -533,6 +537,9 @@ function renderGroup(g) {
       cards.map((c) => renderCard(c, anyPlaced)).join('')}</div>
   </section>`;
 }
+
+// 跟服务端同一套：位置按规则 id 存，没有规则才退回房间名。
+function roomKey(r) { return r.rule || r.title; }
 
 function cardRef(c) {
   return c.kind === 'rule' ? `rule.${c.ruleId}` : `${c.scope}.${c.id}`;
@@ -874,8 +881,14 @@ function seedDraft() {
   draft.rooms ??= {};
   draft.tiles ??= {};
 
+  // 按规则 id 存；顺手把旧的按名字存的那条搬过来，不然升级后位置会重置。
   for (const r of state.floorplan?.rooms ?? []) {
-    draft.rooms[r.title] ??= { x: r.x, y: r.y, w: r.w, h: r.h };
+    const k = roomKey(r);
+    if (!draft.rooms[k] && draft.rooms[r.title] && k !== r.title) {
+      draft.rooms[k] = draft.rooms[r.title];
+      delete draft.rooms[r.title];
+    }
+    draft.rooms[k] ??= { x: r.x, y: r.y, w: r.w, h: r.h };
   }
   // 只量分组里的卡片；「未归类」那堆不参与摆放。
   for (const el of app.querySelectorAll('section .tiles .tile[data-tile]')) {
@@ -971,7 +984,7 @@ function wireDrag() {
 
   // 只有房间能拖能缩放。卡片是等宽的一排，能拉大小只会拉歪，所以改成换位置。
   for (const el of app.querySelectorAll('.room[data-room]')) {
-    const key = el.dataset.room;
+    const key = el.dataset.key;
     const p = draft.rooms[key];
     if (!p) continue;
 

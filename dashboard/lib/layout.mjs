@@ -24,7 +24,8 @@ export function applyLayout(config, layout) {
       rooms: config.floorplan.rooms.map((r, i) => ({
         ...r,
         ...fallback(r, i),
-        ...pick(rooms[r.title]),      // 只取位置四个字段 —— layout 不该能改语义
+        // 只取位置四个字段 —— layout 不该能改语义。
+        ...pick(rooms[roomKey(r)] ?? rooms[r.title]),
       })),
     };
   }
@@ -36,6 +37,14 @@ export function applyLayout(config, layout) {
     }));
   }
   return out;
+}
+
+// 位置按**规则 id** 存，不按房间名 —— 房间名是会改的（「沙发」改成「客厅」），
+// 按名字存的话一改名摆好的位置就成孤儿。规则 id 不会变。
+//
+// 读的时候还认按名字存的那份：已经拖好的布局不能一升级就没。
+export function roomKey(r) {
+  return r.rule || r.title;
 }
 
 export function cardRef(c) {
