@@ -25,9 +25,14 @@ const STATE_DIR = process.env.MGS_DASH_STATE_DIR
   || join(homedir(), 'Library', 'Application Support', 'MijiaDashboard');
 // 语义地图的查找顺序：环境变量 → 住户机器上的那份 → .app 里打包进去的默认。
 // 三个都没有就是扁平只读模式（装上就能用，但看不到房间和结论）。
-const CONFIG_PATH = process.env.MGS_DASH_CONFIG
-  || [join(STATE_DIR, 'dashboard.json'), join(HERE, 'config', 'dashboard.json')].find((p) => existsSync(p))
-  || join(STATE_DIR, 'dashboard.json');
+//
+// **每次现算，不在启动时定死** —— 不然把新配置丢进 Application Support 之后
+// 不重启就不认，人会以为「放了没用」。
+function configPath() {
+  return process.env.MGS_DASH_CONFIG
+    || [join(STATE_DIR, 'dashboard.json'), join(HERE, 'config', 'dashboard.json')].find((p) => existsSync(p))
+    || join(STATE_DIR, 'dashboard.json');
+}
 const PORT = Number(process.env.MGS_DASH_PORT || 7391);
 
 mkdirSync(STATE_DIR, { recursive: true });
@@ -125,7 +130,7 @@ if (process.env.MGS_DASH_BASE_URL) {
 
 // 语义地图每次读盘：文件小，而且这样改完配置刷新页面就生效，不用重启。
 function config() {
-  return loadConfig(CONFIG_PATH);
+  return loadConfig(configPath());
 }
 
 const cache = makeCache({ ttlMs: 10_000, load: () => gw.snapshot() });
